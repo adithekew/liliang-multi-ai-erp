@@ -12,4 +12,5 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements.txt httpx
       - run: python -m compileall -q app.py
+      - run: python -m unittest discover -s tests -v
       - run: python -c "import os; os.environ.update(ADMIN_EMAIL='admin@test.local', ADMIN_PASSWORD='ci-test-strong-pass-001', SECRET_KEY='a-ci-token-signing-key-32chars-or-more', DATABASE_PATH='/tmp/liliang-ci.db'); from fastapi.testclient import TestClient; from app import app; from contextlib import ExitStack; ctx=TestClient(app); ctx.__enter__(); assert ctx.get('/healthz').status_code==200; assert ctx.get('/readyz').json()['ready'] is True; r=ctx.post('/v1/auth/login',json={'email':'admin@test.local','password':'ci-test-strong-pass-001'}); assert r.status_code==200,r.text; h={'Authorization':'Bearer '+r.json()['access_token']}; assert len(ctx.get('/v1/products',headers=h).json())==5; ctx.__exit__(None,None,None)"

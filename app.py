@@ -107,7 +107,13 @@ def ready(db=Depends(get_db)):
 @app.post("/v1/auth/login")
 def login(data:Login,db=Depends(get_db)):
     u=db.execute("SELECT * FROM users WHERE email=?",(data.email.lower().strip(),)).fetchone()
-    if not u or not ph.verify(u["hash"],data.password):
+    valid=False
+    if u:
+        try:
+            valid=ph.verify(u["hash"],data.password)
+        except Exception:
+            valid=False
+    if not valid:
         raise HTTPException(401,"Incorrect email or password")
     token=jwt.encode({"sub":str(u["id"]),"exp":datetime.now(timezone.utc)+timedelta(hours=8)},SECRET_KEY,algorithm="HS256")
     return {"access_token":token,"user":{"id":u["id"],"role":u["role"],"name":u["name"]}}
@@ -198,6 +204,10 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
     q=db.execute("SELECT id,status FROM inquiries WHERE id=?",(iid,)).fetchone()
     if not q:raise HTTPException(404,"Inquiry not found")
     if q["status"]!="TECH_REVIEWED":raise HTTPException(409,"Expert review required")
+    if data.decision=="APPROVE":
+        accepted=db.execute("""SELECT 1 FROM reviews v JOIN runs r ON r.id=v.run_id
+          WHERE r.inquiry_id=? AND v.decision='ACCEPT' LIMIT 1""",(iid,)).fetchone()
+        if not accepted:raise HTTPException(409,"At least one accepted Technical review required")
     status="APPROVED" if data.decision=="APPROVE" else "RETURNED"
     with db:
         db.execute("UPDATE inquiries SET status=? WHERE id=?",(status,iid))
