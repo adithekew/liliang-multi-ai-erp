@@ -169,26 +169,18 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
     if not q:raise HTTPException(404,"Inquiry not found")
     if u["role"]=="sales" and q["created_by"]!=u["id"]:raise HTTPException(403,"Not your inquiry")
     t=time.monotonic()
-    tokens=set(re.findall(r"[a-z]+",q["requirement"].lower()))
-    candidates=[]
-    for p in db.execute("SELECT * FROM products").fetchall():
-        pt=set(re.findall(r"[a-z]+",(" ".join(str(p[k]) for k in ("sku","name","description","profile","application"))).lower()))
-        raw=round(len(tokens&pt)/max(len(tokens|pt),1),5)
-        candidates.append({"product_id":p["id"],"sku":p["sku"],"name":p["name"],"score":raw,
-                           "unknown_attributes":["regulatory","halal_status"],"source_ref":p["source_ref"],"evidence_verified":False})
-    candidates.sort(key=lambda x:(-x["score"],x["sku"]))
-    candidates=candidates[:5]
+    candidates=score_products(q["requirement"],db.execute("SELECT * FROM products").fetchall())
     elapsed=int((time.monotonic()-t)*1000)
     with db:
-        run=db.execute("INSERT INTO runs(inquiry_id,method,latency_ms,created_at) VALUES(?,'lexical-jaccard-baseline-v01',?,?)",(iid,elapsed,now()))
+        run=db.execute("INSERT INTO runs(inquiry_id,method,latency_ms,created_at) VALUES(?,'bm25-expert-review-demo-v0.2',?,?)",(iid,elapsed,now()))
         for rank,item in enumerate(candidates,1):
             item["rank"]=rank
             db.execute("INSERT INTO candidates(run_id,product_id,score,rank,unknown) VALUES(?,?,?,?,?)",
                      (run.lastrowid,item["product_id"],item["score"],rank,",".join(item["unknown_attributes"])))
         db.execute("UPDATE inquiries SET status='MATCHED' WHERE id=?",(iid,))
         audit(db,u,"MATCH_BASELINE","run",run.lastrowid)
-    return {"run_id":run.lastrowid,"method":"lexical-jaccard-baseline-v01","latency_ms":elapsed,
-            "candidates":candidates,"notice":"Not semantic AI; demonstration with synthetic catalog. Technical review required."}
+    return {"run_id":run.lastrowid,"method":"bm25-expert-review-demo-v0.2","latency_ms":elapsed,
+            "candidates":candidates,"notice":"BM25 lexical retrieval demo only: neural embeddings, factual evidence and validation pending. Technical review required."}
 @app.get("/v1/matches/{rid}")
 def show_match(rid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
     q=db.execute("SELECT r.*,i.created_by FROM runs r JOIN inquiries i ON i.id=r.inquiry_id WHERE r.id=?",(rid,)).fetchone()
@@ -226,8 +218,12 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "inquiry_count":db.execute("SELECT COUNT(*) FROM inquiries").fetchone()[0],
             "ai_matching":"LEXICAL_BASELINE_ONLY","bundling":"NOT_IMPLEMENTED",
             "forecast":"NOT_IMPLEMENTED","data_classification":"SYNTHETIC_DEMO"}
+from multi_ai import mount_ai, score_products
+mount_ai(app,current,get_db)
+from rich_ui import html_page
+
 @app.get("/",response_class=HTMLResponse,include_in_schema=False)
-def index():return HTML
+def index():return html_page()
 HTML="""<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PT Liliang | ERP Multi-AI</title><style>
 :root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#18324f;background:#f4f7fb}*{box-sizing:border-box}
 header{padding:18px 25px;background:#142d56;color:white;display:flex;align-items:center;justify-content:space-between}header b{font-size:20px}header small{display:block;color:#a7d2ff;margin-top:3px}
