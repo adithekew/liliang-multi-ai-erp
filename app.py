@@ -14,8 +14,15 @@ DB_PATH=os.getenv("DATABASE_PATH","/tmp/liliang-erp-pilot.db")
 ADMIN_EMAIL=os.getenv("ADMIN_EMAIL","").lower().strip()
 ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD","")
 SECRET_KEY=os.getenv("SECRET_KEY","")
-if not ADMIN_EMAIL or len(ADMIN_PASSWORD)<12 or len(SECRET_KEY)<32:
-    raise RuntimeError("Set ADMIN_EMAIL, ADMIN_PASSWORD (>=12), SECRET_KEY (>=32).")
+invalid_settings=[]
+if not ADMIN_EMAIL:
+    invalid_settings.append("ADMIN_EMAIL is missing")
+if len(ADMIN_PASSWORD)<12:
+    invalid_settings.append("ADMIN_PASSWORD is missing or shorter than 12 characters")
+if len(SECRET_KEY)<32:
+    invalid_settings.append("SECRET_KEY is missing or shorter than 32 characters")
+if invalid_settings:
+    raise RuntimeError("Invalid Render Environment Variables: " + "; ".join(invalid_settings) + ". Values are never logged.")
 if os.getenv("APP_ENV","pilot")=="production":
     raise RuntimeError("This research pilot cannot run in production mode.")
 ph=PasswordHasher()
