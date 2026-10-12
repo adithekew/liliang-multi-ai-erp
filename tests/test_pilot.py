@@ -53,6 +53,40 @@ class PilotFlow(unittest.TestCase):
             warehouse=client.get("/v1/inquiries",headers=roles["gudang"]).json()[0]
             self.assertNotIn("requirement",warehouse)
             self.assertNotIn("customer_ref",warehouse)
+            # Multi-AI workspace is visible and accurately labeled as demo.
+            homepage=client.get("/")
+            self.assertEqual(homepage.status_code,200)
+            self.assertIn("Multi-AI Workspace",homepage.text)
+            caps=client.get("/v1/ai/capabilities",headers=admin)
+            self.assertEqual(caps.status_code,200,caps.text)
+            self.assertEqual(len(caps.json()["modules"]),4)
+            self.assertFalse(caps.json()["all_models_validated"])
+            req=client.post("/v1/ai/requirements",
+                json={"text":"Butuh stroberi untuk minuman susu"},
+                headers=roles["sales"])
+            self.assertEqual(req.status_code,200,req.text)
+            self.assertEqual(req.json()["flavor"],"strawberry")
+            self.assertEqual(req.json()["attributes"]["halal_status"]["status"],"UNKNOWN")
+            self.assertEqual(client.post("/v1/ai/requirements",
+                json={"text":"strawberry beverage flavor"},
+                headers=roles["gudang"]).status_code,403)
+            preview=client.post("/v1/ai/match-preview",
+                json={"text":"strawberry flavor untuk minuman susu"},headers=roles["sales"])
+            self.assertEqual(preview.status_code,200,preview.text)
+            self.assertEqual(preview.json()["mode"],"lexical-only")
+            self.assertEqual(preview.json()["candidates"][0]["sku"],"FLV-STRAW-01")
+            rules=client.get("/v1/ai/bundling",headers=roles["sales"])
+            self.assertEqual(rules.status_code,200,rules.text)
+            self.assertEqual(rules.json()["basket_count"],16)
+            self.assertGreater(len(rules.json()["rules"]),0)
+            self.assertEqual(client.get("/v1/ai/bundling",headers=roles["gudang"]).status_code,403)
+            fc=client.get("/v1/ai/forecast?sku=FLV-STRAW-01&horizon=4",headers=roles["gudang"])
+            self.assertEqual(fc.status_code,200,fc.text)
+            self.assertEqual(len(fc.json()["forecast"]),4)
+            self.assertEqual(len(fc.json()["history"]),24)
+            self.assertGreater(fc.json()["metrics"]["rolling_mae_units"],0)
+            self.assertEqual(client.get("/v1/ai/forecast?sku=INVALID",headers=admin).status_code,404)
+            self.assertEqual(client.get("/v1/ai/forecast",headers=roles["technical"]).status_code,403)
 
 if __name__=="__main__":
     unittest.main()
