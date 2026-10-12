@@ -1,0 +1,184 @@
+"""Responsive ERP Multi-AI pilot UI; all displayed business records are synthetic."""
+def html_page():
+    return r"""<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PT Liliang | ERP Multi-AI Research Pilot</title>
+<style>
+:root{--navy:#102546;--navy2:#1b3b63;--blue:#2864df;--mint:#12bca4;--text:#17304f;--muted:#75859b;--bg:#f4f7fc;--border:#e4ebf5;--red:#ba394d;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,textarea,select{font:inherit}button{cursor:pointer}
+.layout{min-height:100vh;display:flex}.sidebar{width:254px;background:var(--navy);color:#cddbf0;padding:25px 16px;position:sticky;top:0;height:100vh;flex-shrink:0;overflow:auto}.brand{display:flex;align-items:center;gap:11px;padding:7px 10px 26px;border-bottom:1px solid #ffffff1c;margin-bottom:22px}
+.logo{width:42px;height:42px;background:linear-gradient(135deg,#2d86f7,#17d1b2);color:white;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:21px}
+.brand strong{color:white;font-size:18px}.brand small{display:block;color:#9ebbd5;font-size:10px;margin-top:3px;letter-spacing:.1em}
+.menutitle{text-transform:uppercase;color:#7897b6;font-size:10px;letter-spacing:.15em;padding:16px 13px 7px;font-weight:800}
+.navitem{display:flex;gap:12px;align-items:center;color:#cbd9e9;text-decoration:none;border:0;background:transparent;width:100%;text-align:left;padding:13px 12px;border-radius:10px;margin:3px 0;font-size:13px;font-weight:600}
+.navitem span{font-size:18px;width:22px;text-align:center}.navitem:hover,.navitem.active{background:#27507f;color:#fff}.sidefoot{border-top:1px solid #ffffff21;margin-top:26px;padding:19px 12px;color:#9fb8d1;font-size:12px;line-height:1.6}
+.main{flex:1;min-width:0}.topbar{background:#fff;border-bottom:1px solid var(--border);height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 34px;gap:12px}
+.topbar strong{font-size:15px}.topright{display:flex;align-items:center;gap:12px;font-size:12px}.rolepill{background:#eff4ff;color:#1c5abf;padding:7px 12px;border-radius:20px;font-weight:800}.avatar{width:35px;height:35px;background:#e4edfb;border-radius:50%;display:grid;place-items:center;font-weight:900;color:#235caf}
+.content{padding:30px 35px 60px;max-width:1490px;margin:0 auto}.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.16em;font-weight:900;color:#227bc2}
+h1{font-size:28px;letter-spacing:-.03em;margin:7px 0 9px;color:var(--navy)}h2{font-size:17px;margin:0 0 14px;color:var(--navy)}h3{font-size:14px;margin:0 0 12px}.sub{color:var(--muted);font-size:13px;line-height:1.65;max-width:830px}
+.hero{background:linear-gradient(112deg,#112b50,#25578e);color:white;border-radius:18px;padding:28px 32px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.hero h1{color:#fff;margin:4px 0}.hero .sub{color:#b9d1ea}.hero .eyebrow{color:#66ebd5}.orbit{font-size:52px;color:#9feee5;opacity:.9}
+.warning{border:1px solid #f7dcad;background:#fffaf0;color:#7d5923;border-radius:10px;padding:12px 16px;font-size:12px;line-height:1.6;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{background:#fff;border:1px solid var(--border);border-radius:15px;padding:21px;box-shadow:0 7px 26px #2a436208;margin-bottom:16px;min-width:0}.card h2{margin-bottom:16px}.kpi{font-size:29px;font-weight:850;margin:13px 0 4px;color:var(--navy)}.kpi-lbl{font-size:12px;font-weight:800;color:#667a92}.iconbox{display:grid;place-items:center;font-size:23px;width:44px;height:44px;background:#eff5ff;border-radius:12px}
+.module{border-top:4px solid #2d73d8;display:flex;flex-direction:column;min-height:246px}.module:nth-child(2){border-top-color:#13ad9f}.module:nth-child(3){border-top-color:#885bd7}.module:nth-child(4){border-top-color:#e8a144}
+.module p{color:#697f97;font-size:12px;line-height:1.65;flex:1}.line{display:flex;align-items:center;justify-content:space-between;gap:8px}.status{font-weight:800;color:#3869a7;background:#eaf1fc;padding:6px 9px;border-radius:8px;font-size:10px}.small{font-size:12px;color:var(--muted)}
+.btn{border:0;border-radius:9px;padding:11px 17px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;min-height:38px}
+.btn.secondary{background:#eff4fb;color:#1e558f}.btn:disabled{opacity:.45;cursor:not-allowed}.btn:hover{filter:brightness(.95)}.btn.danger{background:#b83b4e}.actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+label{font-size:12px;font-weight:750;color:#536883;display:block;margin:11px 0 7px}
+input,select,textarea{padding:11px 13px;border:1px solid #d2deed;border-radius:9px;color:var(--navy);background:white;width:100%;font-size:13px;outline:0}
+input:focus,textarea:focus,select:focus{border-color:#4189df;box-shadow:0 0 0 3px #4189df16}textarea{min-height:96px;resize:vertical}.form-actions{margin-top:15px}
+.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f8fd;color:#5d738d;font-weight:800}th,td{text-align:left;padding:12px;border-bottom:1px solid #eaf0f7;vertical-align:top}td{color:#2f4b69}td .btn{padding:7px 9px;min-height:28px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f9fd;border-radius:10px;padding:15px;font-size:12px;line-height:1.7}
+.tag{display:inline-block;font-size:10px;border-radius:7px;padding:5px 8px;font-weight:850;background:#e9f7f2;color:#187f66}.tag.unknown{background:#fff3df;color:#916316}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.note{color:#6f8399;font-size:11px;line-height:1.6;margin:8px 0}.empty{padding:20px;text-align:center;color:#8b9caf}.error{color:var(--red);font-size:12px}
+#toast{position:fixed;bottom:25px;right:25px;background:#173858;color:white;padding:14px 22px;border-radius:10px;display:none;box-shadow:0 8px 25px #12294533;z-index:50;font-size:13px}
+#loginwrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(132deg,#122948,#2864a3)}
+.login{width:min(450px,100%);padding:33px;background:#fff;border-radius:19px;box-shadow:0 25px 60px #04183244}
+.login h1{font-size:24px}.login .logo{width:52px;height:52px;margin-bottom:20px}.fine{font-size:11px;color:#8193a8;line-height:1.6}
+.chart{display:flex;align-items:end;gap:5px;height:175px;border-bottom:1px solid #dee8f2;margin:18px 0 12px}.bar{flex:1;min-width:9px;background:#c8daf8;border-radius:5px 5px 0 0;position:relative}.bar.pred{background:#18bda7}.bar:hover:after{content:attr(title);position:absolute;bottom:100%;left:0;background:#243c5b;color:#fff;padding:5px;border-radius:5px;white-space:nowrap;font-size:10px;z-index:3}.tabs{display:flex;gap:7px;flex-wrap:wrap;margin:18px 0}
+.mobilemenu{display:none}.hide{display:none!important}@media(max-width:1150px){.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:760px){.sidebar{display:none}.sidebar.open{display:block;position:fixed;z-index:10}.mobilemenu{display:inline-block}.topbar{padding:0 15px}.content{padding:20px 14px}.grid,.grid.two{grid-template-columns:1fr}.hero{padding:22px}.orbit{display:none}.topright .rolepill{display:none}}
+</style></head><body><div id="root"></div><div id="toast"></div><script>
+const $=id=>document.getElementById(id);
+const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let token=sessionStorage.getItem("liliang_token")||"",me=null,page="hub",capabilities=[];
+async function api(path,method="GET",body=null){
+ let opt={method,headers:{"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})}};
+ if(body!==null)opt.body=JSON.stringify(body);
+ let res=await fetch(path,opt),json;try{json=await res.json()}catch{throw Error("Server did not return JSON");}
+ if(!res.ok)throw Error(typeof json.detail==="string"?json.detail:JSON.stringify(json.detail||json));
+ return json;
+}
+function toast(s,error=false){const t=$("toast");t.textContent=s;t.style.background=error?"#ad3345":"#173858";t.style.display="block";setTimeout(()=>t.style.display="none",3900)}
+function fail(e){toast(e.message||String(e),true)}
+function logout(){sessionStorage.removeItem("liliang_token");token="";me=null;loginScreen()}
+function loginScreen(){
+ $("root").innerHTML='<main id="loginwrap"><section class="login"><div class="logo">L</div><div class="eyebrow">RESEARCH PILOT / CLOUD</div><h1>ERP Multi-AI PT. Liliang</h1><p class="sub">Integrated B2B Flavor Workflow & Intelligent Decision Support</p><form id="signin"><label>Email Akun Internal</label><input type="email" name="email" required autocomplete="username" placeholder="admin@liliang.local"><label>Password</label><input type="password" name="password" required autocomplete="current-password"><div class="form-actions"><button class="btn" style="width:100%">Masuk ke ERP →</button></div></form><p class="fine">Research development environment. Jangan masukkan data customer atau informasi rahasia perusahaan.</p><p class="error" id="loginerror"></p></section></main>';
+ $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);await enter()}catch(err){$("loginerror").textContent=err.message}};
+}
+const menu=[
+ ["hub","◈","Multi-AI Workspace","AI MODULES"],
+ ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
+ ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
+ ["catalog","◉","Product Catalog","ERP OPERATIONS"],
+ ["bundling","♧","Sales Intelligence","AI MODULES"],
+ ["forecast","▥","Forecast & Inventory","AI MODULES"],
+ ["users","⚙","User Management","ADMIN"]
+];
+function allowed(key){
+ if(key==="users")return me.role==="admin";
+ if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
+ if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
+ return true;
+}
+function frame(){
+ let last="",items="";
+ menu.filter(x=>allowed(x[0])).forEach(x=>{
+  if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
+  items+='<button class="navitem '+(page===x[0]?"active":"")+'" data-go="'+x[0]+'"><span>'+x[1]+'</span>'+x[2]+'</button>';
+ });
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.2 · Synthetic dataset<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Data SQLite di Render Free tidak persisten.</div><div id="view"></div></main></div></div>';
+ document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navigate(b.dataset.go));
+}
+function toggleMenu(){$("side").classList.toggle("open")}
+async function enter(){
+ try{me=await api("/v1/auth/me");let x=await api("/v1/ai/capabilities");capabilities=x.modules;page="hub";frame();await show()}
+ catch(e){if(e.message.includes("expired")||e.message.includes("Login"))logout();else{fail(e);loginScreen()}}
+}
+async function navigate(p){if(!allowed(p))return;page=p;frame();await show()}
+async function show(){
+ try{if(page==="hub")await hub();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+}
+const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
+async function hub(){
+ let modules=capabilities.map((x,i)=>'<article class="card module"><div class="line"><div class="iconbox">'+["✦","◎","♧","▥"][i]+'</div><span class="status">'+escapeHtml(x.status)+'</span></div><h2 style="margin:16px 0 3px">'+escapeHtml(x.id)+' · '+escapeHtml(x.title)+'</h2><p>'+escapeHtml(x.method)+'<br><strong>Data:</strong> '+escapeHtml(x.dataset)+'</p><button class="btn secondary" onclick="'+(["demoRequirement()","demoMatch()","navigate('bundling')","navigate('forecast')"][i])+'">Lihat & Uji Modul →</button></article>').join("");
+ $("view").innerHTML='<div class="hero"><div><div class="eyebrow">MULTI-AI INTEGRATION</div><h1>AI-Powered Flavor ERP</h1><p class="sub">Empat kapabilitas dalam satu platform dengan validasi Technical dan human-in-the-loop. Belum termasuk model penelitian yang telah diuji.</p><button class="btn" onclick="navigate(\'inquiries\')">Buat Customer Inquiry →</button></div><div class="orbit">✧ ◈ ✧</div></div><div class="toolbar"><h2>Multi-AI Research Modules</h2><span class="tag unknown">4 DEMO BASELINES · 0 VALIDATED MODELS</span></div><div class="grid">'+modules+'</div><div id="lab"></div><div class="grid two"><div class="card"><h2>Research Focus (Primary)</h2><p class="sub">Inquiry → requirement NLP → BM25 → future embeddings & hybrid fusion → reranking → UNKNOWN/provenance → Technical expert review.</p><span class="tag unknown">Embeddings & RRF pending</span></div><div class="card"><h2>Enterprise Roadmap (Secondary)</h2><p class="sub">Order basket analysis dan SKU-week forecasting memakai data simulasi. Validitas pada data perusahaan membutuhkan izin, kualitas historis penjualan, dan evaluasi terpisah.</p><span class="tag">No auto-sell / auto-restock</span></div></div>';
+}
+const sample="Customer membutuhkan rasa stroberi manis untuk minuman susu, halal dan cocok untuk produk dairy.";
+async function demoRequirement(){
+ $("lab").innerHTML='<section class="card"><div class="eyebrow">AI-01 / RULE-BASED NLP</div><h2>Requirement Interpreter Lab</h2><p class="sub">Ekstraksi profil dan aplikasi dari permintaan pelanggan bilingual. Status yang tidak dapat dibuktikan tetap UNKNOWN.</p><textarea id="query">'+escapeHtml(sample)+'</textarea><div class="actions"><button class="btn" onclick="runRequirement()">Analisis Inquiry</button><button class="btn secondary" onclick="demoMatch()">Lanjut ke AI-02 →</button></div><div id="labresult"></div></section>';
+ $("lab").scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function runRequirement(){
+ try{const x=await api("/v1/ai/requirements","POST",{text:$("query").value});
+ $("labresult").innerHTML='<div class="grid two" style="margin-top:18px"><div class="card"><h3>Structured Attributes</h3><p><b>Flavor:</b> '+escapeHtml(x.flavor||"UNKNOWN")+'</p><p><b>Application:</b> '+escapeHtml(x.application||"UNKNOWN")+'</p><p><b>Method:</b> '+escapeHtml(x.method)+'</p></div><div class="card"><h3>Evidence & Guardrails</h3>'+Object.entries(x.attributes).map(([name,a])=>'<p class="small">'+escapeHtml(name)+': <span class="tag '+(a.status==="UNKNOWN"?"unknown":"")+'">'+escapeHtml(a.status)+'</span></p>').join("")+'</div></div>';
+ }catch(e){fail(e)}
+}
+async function demoMatch(){
+ $("lab").innerHTML='<section class="card"><div class="eyebrow">AI-02 / BM25 RETRIEVAL</div><h2>Flavor Product Matching Lab</h2><p class="sub">Peringkat kandidat melalui BM25 lexical retrieval, bukan pretrained neural embeddings. Shortlist belum boleh dikirim ke customer sebelum validasi Technical.</p><textarea id="query">'+escapeHtml(sample)+'</textarea><div class="actions"><button class="btn" onclick="runMatch()">Cari Top-5 Flavor</button><button class="btn secondary" onclick="navigate(\'inquiries\')">Simpan ke Workflow →</button></div><div id="labresult"></div></section>';
+ $("lab").scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function runMatch(){
+ try{let d=await api("/v1/ai/match-preview","POST",{text:$("query").value});
+ $("labresult").innerHTML='<div class="card" style="margin-top:18px"><div class="toolbar"><h3>Candidate Top-5</h3><span class="tag unknown">Not expert validated</span></div><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor Product</th><th>BM25 Score</th><th>Evidence</th><th>Constraint</th></tr>'+d.candidates.map(x=>'<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td><b>'+escapeHtml(x.name)+'</b></td><td>'+x.score+'</td><td><span class="tag unknown">Not verified</span></td><td>Regulatory / Halal UNKNOWN</td></tr>').join("")+'</table></div><p class="note">Preview hanya simulasi. Untuk menyimpan ranking, buat Inquiry dan kirim ke Technical Review.</p></div>';
+ }catch(e){fail(e)}
+}
+async function overview(){
+ let [s,c]=await Promise.all([api("/v1/analytics/summary"),api("/v1/ai/capabilities")]);
+ $("view").innerHTML=headline("ERP / MANAGEMENT","Dashboard Operasional","Ringkasan workflow ERP dan kesiapan modul analitik.")+
+ '<div class="grid"><div class="card"><div class="kpi-lbl">Master Flavor (Dummy)</div><div class="kpi">'+s.product_count+'</div><span class="tag">Synthetic</span></div><div class="card"><div class="kpi-lbl">Customer Inquiries</div><div class="kpi">'+s.inquiry_count+'</div><span class="small">Ephemeral records</span></div><div class="card"><div class="kpi-lbl">Available AI Demos</div><div class="kpi">'+c.modules.length+'</div><span class="tag unknown">Baseline only</span></div><div class="card"><div class="kpi-lbl">Validated AI Models</div><div class="kpi">0</div><span class="small">Research pending</span></div></div>'+
+ '<div class="grid two"><div class="card"><h2>Workflow Proyek</h2><p class="sub">Sales Inquiry → BM25 shortlist → Technical review → Manager approval. Setiap keputusan penting memerlukan persetujuan manusia.</p><button class="btn" onclick="navigate(\'inquiries\')">Buka Workflow</button></div><div class="card"><h2>Integrasi Empat Modul</h2><p class="sub">AI-01 requirements, AI-02 product matching, AI-03 bundling, AI-04 demand forecasting. Pilih modul dari Multi-AI Workspace.</p><button class="btn secondary" onclick="navigate(\'hub\')">Buka Multi-AI →</button></div></div>';
+}
+async function catalog(){
+ const p=await api("/v1/products");
+ $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog","Master SKU contoh untuk validasi fitur. Tidak ada datasheet PT. Liliang yang terhubung.")+
+ '<div class="card"><div class="toolbar"><h2>Master Flavor</h2><span class="tag unknown">DEMO-ONLY</span></div><div class="tablewrap"><table><tr><th>SKU</th><th>Product Name</th><th>Flavor</th><th>Application</th><th>Stock</th><th>Source</th></tr>'+p.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.profile)+'</td><td>'+escapeHtml(x.application)+'</td><td>'+escapeHtml(x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref)+'</span></td></tr>').join("")+'</table></div></div>';
+}
+async function inquiries(){
+ let rows=await api("/v1/inquiries"),canNew=["admin","sales"].includes(me.role);
+ let create=canNew?'<div class="card"><h2>New Customer Inquiry</h2><form id="newinq"><label>Customer Reference (Anonymous)</label><input name="customer_ref" value="DEMO-ANON" maxlength="80"><label>Deskripsi Kebutuhan Flavor</label><textarea name="requirement" minlength="5" required placeholder="Contoh: Strawberry flavor untuk minuman susu..."></textarea><div class="form-actions"><button class="btn">Simpan Inquiry</button></div></form></div>':"";
+ $("view").innerHTML=headline("ERP / SALES TO TECHNICAL","Inquiry & Matching Workflow","Inquiry disimpan sebelum pemeringkatan produk. Technical memvalidasi, Manager menyetujui.")+
+ '<div class="grid two"><div>'+create+'</div><div class="card"><h2>Human-in-the-Loop</h2><p class="sub">1. Sales memasukkan requirement.<br>2. Sistem menghasilkan Top-5 kandidat BM25.<br>3. Technical menilai relevansi 0–3.<br>4. Manager melakukan approval apabila kandidat telah di-ACCEPT.</p><span class="tag unknown">No automatic sales</span></div></div>'+
+ '<div class="card"><h2>Inquiry Register</h2><div class="tablewrap"><table><tr><th>ID</th><th>Customer</th><th>Requirement</th><th>Status</th><th>Action</th></tr>'+rows.map(x=>'<tr><td>#'+x.id+'</td><td>'+escapeHtml(x.customer_ref||"Restricted")+'</td><td>'+escapeHtml(x.requirement||"Restricted")+'</td><td><span class="tag">'+escapeHtml(x.status)+'</span></td><td>'+([
+"admin","sales","technical"].includes(me.role)?'<button class="btn secondary" onclick="matchInquiry('+x.id+')">Run Matching</button> ':'')+(['admin','manager'].includes(me.role)?'<button class="btn secondary" onclick="managerApproval('+x.id+')">Approval</button>':'')+'</td></tr>').join("")+'</table></div>'+(!rows.length?'<p class="empty">Belum ada inquiry. Buat satu permintaan dummy untuk memulai eksperimen.</p>':'')+'</div><div id="workflowResult"></div>';
+ if(canNew)$("newinq").onsubmit=async e=>{e.preventDefault();try{const z=Object.fromEntries(new FormData(e.target));await api("/v1/inquiries","POST",z);toast("Inquiry disimpan");await inquiries()}catch(err){fail(err)}};
+}
+async function matchInquiry(id){
+ try{let d=await api("/v1/inquiries/"+id+"/match","POST");
+ $("workflowResult").innerHTML='<div class="card"><div class="toolbar"><h2>Ranking Run #'+d.run_id+'</h2><span class="tag unknown">'+escapeHtml(d.method)+'</span></div><p class="sub">'+escapeHtml(d.notice)+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>Score</th><th>Constraint</th><th>Review</th></tr>'+d.candidates.map(x=>'<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.name)+'</td><td>'+x.score+'</td><td>UNKNOWN</td><td>'+ (me.role==="technical"?'<button class="btn secondary" onclick="expertReview('+d.run_id+','+x.product_id+')">Validate</button>':'Technical required')+'</td></tr>').join("")+'</table></div></div>';
+ $("workflowResult").scrollIntoView({behavior:"smooth",block:"start"});
+ }catch(e){fail(e)}
+}
+async function expertReview(run,product){
+ if(me.role!=="technical")return;
+ let decision=prompt("Technical decision (ACCEPT / REJECT / NEEDS_INFO)","ACCEPT");if(!decision)return;
+ let label=prompt("Expert relevance label 0–3","3");if(label===null)return;
+ let rationale=prompt("Technical rationale (min. 5 karakter)","Checked against synthetic requirements");if(!rationale)return;
+ try{await api("/v1/matches/"+run+"/review","POST",{product_id:product,decision,relevance_label:Number(label),rationale});toast("Technical review tersimpan");await inquiries()}catch(e){fail(e)}
+}
+async function managerApproval(id){
+ let decision=prompt("Manager decision: APPROVE / RETURN","APPROVE");if(!decision)return;
+ let note=prompt("Alasan / catatan (min. 5 karakter)","Reviewed Technical result");if(!note)return;
+ try{let r=await api("/v1/inquiries/"+id+"/decision","POST",{decision,note});toast("Status: "+r.status);await inquiries()}catch(e){fail(e)}
+}
+async function bundling(){
+ let d=await api("/v1/ai/bundling");
+ $("view").innerHTML=headline("AI-03 / SALES INTELLIGENCE","Product Bundling Insights","Analisis ko-pembelian memakai association rules dari 16 keranjang transaksi sintetis. Tidak ada histori PT. Liliang yang digunakan.")+
+ '<div class="grid"><div class="card"><div class="kpi-lbl">Synthetic Baskets</div><div class="kpi">'+d.basket_count+'</div></div><div class="card"><div class="kpi-lbl">Candidate Rules</div><div class="kpi">'+d.rules.length+'</div></div><div class="card"><div class="kpi-lbl">Auto-Sell</div><div class="kpi">OFF</div></div><div class="card"><div class="kpi-lbl">Data Source</div><div class="kpi" style="font-size:20px">DEMO</div></div></div>'+
+ '<div class="card"><h2>Frequently Bought Together · Association Rules</h2><div class="tablewrap"><table><tr><th>When customer buys</th><th>Also bought</th><th>Count</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+d.rules.map(x=>'<tr><td><b>'+escapeHtml(x.antecedent_sku)+'</b></td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.co_occurrences+'</td><td>'+(x.support*100).toFixed(1)+'%</td><td>'+(x.confidence*100).toFixed(1)+'%</td><td><span class="tag">'+x.lift.toFixed(2)+'×</span></td></tr>').join("")+'</table></div><p class="note">Threshold: support ≥12%, confidence ≥35%. Semua nilai diturunkan dari keranjang buatan; evaluasi pada histori transaksi aktual diperlukan.</p></div>'+
+ '<div class="grid two"><div class="card"><h2>Bagaimana AI-03 bekerja?</h2><p class="sub">Order baskets → frequency counts → association rules → business filters → validasi Sales. Untuk data aktual, batal/retur, promosi dan split temporal harus diproses.</p></div><div class="card"><h2>Research Scope</h2><p class="sub">AI-03 merupakan eksperimen sekunder. Angka lift pada demo tidak dapat diklaim sebagai pola pembelian PT. Liliang.</p></div></div>';
+}
+async function forecast(){
+ let p=await api("/v1/products");
+ const allowed=p.filter(x=>["FLV-STRAW-01","FLV-VANI-02","FLV-MANG-03","FLV-CHOCO-04","FLV-LEMON-05"].includes(x.sku));
+ $("view").innerHTML=headline("AI-04 / DEMAND FORECASTING","Sales Demand Intelligence","Prediksi SKU-week berdasarkan 24 minggu penjualan sintetis dengan baseline 4-week moving average.")+
+ '<div class="card"><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
+ await runForecast();
+}
+async function runForecast(){
+ try{let sku=$("sku").value,h=$("horizon").value,d=await api("/v1/ai/forecast?sku="+encodeURIComponent(sku)+"&horizon="+h);
+ let hist=d.history.slice(-12).map(x=>({value:x.units,week:x.week,pred:false}));
+ let pred=d.forecast.map(x=>({value:x.predicted_units,week:x.week,pred:true}));
+ let bars=hist.concat(pred),m=Math.max(...bars.map(x=>x.value),1);
+ $("forecastResult").innerHTML='<div class="grid"><div class="card"><div class="kpi-lbl">Next Week Forecast</div><div class="kpi">'+d.forecast[0].predicted_units+'</div><span class="small">Simulated units</span></div><div class="card"><div class="kpi-lbl">Rolling MAE</div><div class="kpi">'+d.metrics.rolling_mae_units+'</div><span class="small">Units</span></div><div class="card"><div class="kpi-lbl">Rolling WMAPE</div><div class="kpi">'+d.metrics.rolling_wmape_pct+'%</div><span class="small">On synthetic time-series</span></div><div class="card"><div class="kpi-lbl">Model</div><div class="kpi" style="font-size:17px">4-week MA</div><span class="small">Baseline · Not LLM</span></div></div>'+
+ '<div class="card"><h2>SKU Demand — Synthetic History + Forecast</h2><div class="chart">'+bars.map(x=>'<div class="bar '+(x.pred?'pred':'')+'" style="height:'+Math.max(4,x.value/m*100)+'%" title="'+escapeHtml(x.week)+' · '+x.value+' units"></div>').join("")+'</div><div class="line"><span class="small">■ Blue: history (last 12 weeks)</span><span class="small" style="color:#129d88">■ Green: forecast ('+h+' weeks)</span></div><p class="note">'+escapeHtml(d.disclaimer)+'</p></div>';
+ }catch(e){fail(e)}
+}
+async function users(){
+ let users=await api("/v1/users");
+ $("view").innerHTML=headline("ADMIN / ACCESS CONTROL","User Management","Kelola akun internal lima role. Data tersimpan sementara pada Render Free.")+
+ '<div class="grid two"><div class="card"><h2>Buat Akun Internal</h2><form id="newuser" autocomplete="off"><label>Nama</label><input name="name" minlength="2" autocomplete="off" required><label>Email</label><input name="email" type="email" autocomplete="off" required><label>Password (minimal 12 karakter)</label><input name="password" type="password" autocomplete="new-password" minlength="12" required><label>Role</label><select name="role"><option value="sales">Sales</option><option value="technical">Technical</option><option value="manager">Manager Operasional</option><option value="gudang">Gudang</option><option value="admin">Admin</option></select><div class="form-actions"><button class="btn">Buat User</button></div></form></div><div class="card"><h2>Registered Users</h2><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th></tr>'+users.map(x=>'<tr><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.email)+'</td><td><span class="tag">'+escapeHtml(x.role)+'</span></td></tr>').join("")+'</table></div></div></div>';
+ $("newuser").onsubmit=async e=>{e.preventDefault();try{let data=Object.fromEntries(new FormData(e.target));await api("/v1/users","POST",data);toast("Akun baru dibuat");await users()}catch(e){fail(e)}};
+}
+if(token)enter();else loginScreen();
+</script></body></html>"""
