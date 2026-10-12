@@ -36,8 +36,12 @@ DEMO=[
  ("FLV-LEMON-05","Lemon Flavor","Citrus lemon for cold beverages","lemon","beverage"),
 ]
 def connect():
-    db=sqlite3.connect(DB_PATH,timeout=20)
+    # FastAPI yields sync dependencies and executes handlers in a worker threadpool.
+    # A request-scoped SQLite connection may be created and closed in different
+    # worker threads; keep one connection per request and allow that handoff.
+    db=sqlite3.connect(DB_PATH,timeout=20,check_same_thread=False)
     db.row_factory=sqlite3.Row
+    db.execute("PRAGMA busy_timeout=20000")
     db.execute("PRAGMA foreign_keys=ON")
     return db
 def boot():
@@ -216,8 +220,8 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
     return {"product_count":db.execute("SELECT COUNT(*) FROM products").fetchone()[0],
             "inquiry_count":db.execute("SELECT COUNT(*) FROM inquiries").fetchone()[0],
-            "ai_matching":"LEXICAL_BASELINE_ONLY","bundling":"NOT_IMPLEMENTED",
-            "forecast":"NOT_IMPLEMENTED","data_classification":"SYNTHETIC_DEMO"}
+            "ai_matching":"LEXICAL_BASELINE_ONLY","bundling":"SYNTHETIC_DEMO",
+            "forecast":"SYNTHETIC_DEMO","data_classification":"SYNTHETIC_DEMO"}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
 from rich_ui import html_page

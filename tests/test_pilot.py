@@ -19,6 +19,26 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(login.status_code,200,login.text)
             admin={"Authorization":"Bearer "+login.json()["access_token"]}
             self.assertEqual(len(client.get("/v1/products",headers=admin).json()),5)
+            # Regression for Render HTTP 500:
+            # FastAPI may initialize the SQLite dependency in a different
+            # worker thread than the synchronous endpoint handler.
+            summary_response=client.get("/v1/analytics/summary",headers=admin)
+            self.assertEqual(summary_response.status_code,200,summary_response.text)
+            self.assertEqual(summary_response.headers["content-type"].split(";")[0],"application/json")
+            summary=summary_response.json()
+            self.assertEqual(summary["product_count"],5)
+            self.assertEqual(summary["inquiry_count"],0)
+            self.assertEqual(summary["bundling"],"SYNTHETIC_DEMO")
+            self.assertEqual(summary["forecast"],"SYNTHETIC_DEMO")
+            from concurrent.futures import ThreadPoolExecutor
+            def dashboard_status(_):
+                result=client.get("/v1/analytics/summary",headers=admin)
+                if result.status_code!=200:
+                    return result.status_code
+                return 200 if result.json().get("product_count")==5 else 999
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                statuses=list(executor.map(dashboard_status,range(36)))
+            self.assertEqual(statuses,[200]*36)
             roles={}
             for role in ("sales","technical","manager","gudang"):
                 r=client.post("/v1/users",json={"name":role.title(),"email":role+"@test.local",
