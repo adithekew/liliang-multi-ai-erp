@@ -107,6 +107,24 @@ class PilotFlow(unittest.TestCase):
             self.assertGreater(fc.json()["metrics"]["rolling_mae_units"],0)
             self.assertEqual(client.get("/v1/ai/forecast?sku=INVALID",headers=admin).status_code,404)
             self.assertEqual(client.get("/v1/ai/forecast",headers=roles["technical"]).status_code,403)
+            # Authentic neural vectors from the versioned, synthetic-only
+            # GitHub Actions fixture: no runtime model and no expert result claims.
+            cases=client.get("/v1/ai/hybrid-cases",headers=roles["sales"])
+            self.assertEqual(cases.status_code,200,cases.text)
+            self.assertTrue(cases.json()["available"])
+            self.assertEqual(len(cases.json()["cases"]),10)
+            self.assertEqual(cases.json()["dimensions"],384)
+            hybrid=client.get("/v1/ai/hybrid-evaluate?case_id=Q01",headers=roles["technical"])
+            self.assertEqual(hybrid.status_code,200,hybrid.text)
+            result=hybrid.json()
+            self.assertEqual(len(result["ranked_candidates"]),5)
+            self.assertEqual(result["embedding_dimensions"],384)
+            self.assertIsNone(result["end_to_end_latency_ms"])
+            self.assertFalse(result["validated_by_technical"])
+            self.assertEqual(result["data_scope"],"SYNTHETIC_EXAMPLES_ONLY")
+            self.assertTrue(all(x["constraint_status"]=="UNKNOWN" for x in result["ranked_candidates"]))
+            self.assertEqual(client.get("/v1/ai/hybrid-cases",headers=roles["gudang"]).status_code,403)
+            self.assertEqual(client.get("/v1/ai/hybrid-evaluate?case_id=Q99",headers=admin).status_code,404)
 
 if __name__=="__main__":
     unittest.main()

@@ -147,9 +147,36 @@ class RequirementRequest(BaseModel):
 def mount_ai(app,current,get_db):
     @app.get("/v1/ai/capabilities")
     def get_capabilities(u=Depends(current)):
-        return {"modules":CAPABILITIES,"all_models_validated":False,
+        from research.hybrid_demo import load_fixture
+        modules=[dict(x) for x in CAPABILITIES]
+        if load_fixture():
+            modules[1]["method"]="BM25 + real multilingual dense embeddings + RRF (fixed-query demo)"
+            modules[1]["status"]="NEURAL_FIXED_QUERY_DEMO"
+            modules[1]["research_role"]="Primary research target; online inference and expert validation pending"
+        return {"modules":modules,"all_models_validated":False,
                 "data_scope":"SYNTHETIC_PILOT",
                 "scientific_note":"Results are demonstrations, not measured findings for PT Liliang."}
+
+    @app.get("/v1/ai/hybrid-cases")
+    def hybrid_cases(u=Depends(current)):
+        if u["role"] not in ("admin","sales","technical","manager"):
+            raise HTTPException(403,"Role access denied")
+        from research.hybrid_demo import public_cases
+        return public_cases()
+
+    @app.get("/v1/ai/hybrid-evaluate")
+    def hybrid_evaluate(case_id:str=Query(default="Q01",min_length=3,max_length=6),u=Depends(current),db=Depends(get_db)):
+        if u["role"] not in ("admin","sales","technical","manager"):
+            raise HTTPException(403,"Role access denied")
+        from research.hybrid_demo import evaluate_case
+        try:
+            return evaluate_case(case_id,db.execute("SELECT * FROM products ORDER BY sku").fetchall())
+        except KeyError:
+            raise HTTPException(404,"Synthetic benchmark case not found")
+        except FileNotFoundError:
+            raise HTTPException(503,"Neural benchmark assets are not ready")
+        except ValueError as exc:
+            raise HTTPException(409,str(exc))
 
     @app.post("/v1/ai/requirements")
     def requirement(data:RequirementRequest,u=Depends(current)):

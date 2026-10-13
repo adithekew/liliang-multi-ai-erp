@@ -1,0 +1,44 @@
+name: Import Verified Synthetic Neural Asset
+on:
+  push:
+    branches:
+      - feature/hybrid-neural-benchmark-v04
+    paths:
+      - .github/workflows/import-neural-asset.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: synthetic-neural-embeddings
+          run-id: 38357715728
+          github-token: ${{ github.token }}
+          path: research/fixtures
+      - name: Validate original real-model artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("research/fixtures/neural_synthetic_v1.json")
+          d=json.loads(p.read_text())
+          assert d["data_scope"]=="SYNTHETIC_EXAMPLES_ONLY"
+          assert d["encoder_type"]=="REAL_PRETRAINED_NEURAL_MULTILINGUAL_SENTENCE_TRANSFORMER"
+          assert d["dimensions"]==384
+          assert len(d["products"])==5 and len(d["queries"])==10
+          assert len(d["model_revision"])>=25
+          print("REAL NEURAL ASSET VALIDATED", d["model_id"], d["model_revision"], p.stat().st_size)
+          PY
+      - name: Import fixture to current development branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/fixtures/neural_synthetic_v1.json
+          git diff --cached --quiet || git commit -m "research: import verified 384d multilingual neural fixture"
+          git fetch origin feature/hybrid-neural-benchmark-v04
+          git rebase origin/feature/hybrid-neural-benchmark-v04
+          git push origin HEAD:feature/hybrid-neural-benchmark-v04

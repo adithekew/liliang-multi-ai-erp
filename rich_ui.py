@@ -58,6 +58,7 @@ function loginScreen(){
 }
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
+ ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
  ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
@@ -67,6 +68,7 @@ const menu=[
 ];
 function allowed(key){
  if(key==="users")return me.role==="admin";
+ if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
  if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
  return true;
@@ -77,7 +79,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<button class="navitem '+(page===x[0]?"active":"")+'" data-go="'+x[0]+'"><span>'+x[1]+'</span>'+x[2]+'</button>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.2 · Synthetic dataset<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Koneksi database dapat berupa SQLite sementara atau PostgreSQL persisten; cek /readyz.</div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.4 · Synthetic research demo<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Koneksi database dapat berupa SQLite sementara atau PostgreSQL persisten; cek /readyz.</div><div id="view"></div></main></div></div>';
  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navigate(b.dataset.go));
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -87,12 +89,12 @@ async function enter(){
 }
 async function navigate(p){if(!allowed(p))return;page=p;frame();await show()}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
  let modules=capabilities.map((x,i)=>'<article class="card module"><div class="line"><div class="iconbox">'+["✦","◎","♧","▥"][i]+'</div><span class="status">'+escapeHtml(x.status)+'</span></div><h2 style="margin:16px 0 3px">'+escapeHtml(x.id)+' · '+escapeHtml(x.title)+'</h2><p>'+escapeHtml(x.method)+'<br><strong>Data:</strong> '+escapeHtml(x.dataset)+'</p><button class="btn secondary" onclick="'+(["demoRequirement()","demoMatch()","navigate('bundling')","navigate('forecast')"][i])+'">Lihat & Uji Modul →</button></article>').join("");
- $("view").innerHTML='<div class="hero"><div><div class="eyebrow">MULTI-AI INTEGRATION</div><h1>AI-Powered Flavor ERP</h1><p class="sub">Empat kapabilitas dalam satu platform dengan validasi Technical dan human-in-the-loop. Belum termasuk model penelitian yang telah diuji.</p><button class="btn" onclick="navigate(\'inquiries\')">Buat Customer Inquiry →</button></div><div class="orbit">✧ ◈ ✧</div></div><div class="toolbar"><h2>Multi-AI Research Modules</h2><span class="tag unknown">4 DEMO BASELINES · 0 VALIDATED MODELS</span></div><div class="grid">'+modules+'</div><div id="lab"></div><div class="grid two"><div class="card"><h2>Research Focus (Primary)</h2><p class="sub">Inquiry → requirement NLP → BM25 → future embeddings & hybrid fusion → reranking → UNKNOWN/provenance → Technical expert review.</p><span class="tag unknown">Embeddings & RRF pending</span></div><div class="card"><h2>Enterprise Roadmap (Secondary)</h2><p class="sub">Order basket analysis dan SKU-week forecasting memakai data simulasi. Validitas pada data perusahaan membutuhkan izin, kualitas historis penjualan, dan evaluasi terpisah.</p><span class="tag">No auto-sell / auto-restock</span></div></div>';
+ $("view").innerHTML='<div class="hero"><div><div class="eyebrow">MULTI-AI INTEGRATION</div><h1>AI-Powered Flavor ERP</h1><p class="sub">Empat kapabilitas dalam satu platform dengan validasi Technical dan human-in-the-loop. Belum termasuk model penelitian yang telah diuji.</p><button class="btn" onclick="navigate(\'inquiries\')">Buat Customer Inquiry →</button></div><div class="orbit">✧ ◈ ✧</div></div><div class="toolbar"><h2>Multi-AI Research Modules</h2><span class="tag unknown">4 RESEARCH MODULES · 0 VALIDATED MODELS</span></div><div class="grid">'+modules+'</div><div id="lab"></div><div class="grid two"><div class="card"><h2>Research Focus (Primary)</h2><p class="sub">Inquiry → requirement NLP → BM25 + offline neural demo → RRF → UNKNOWN/provenance → Technical expert review; arbitrary live neural inference remains pending.</p><span class="tag unknown">Offline fixed-query neural proof-of-concept</span><p><button class="btn secondary" onclick="navigate(\'hybrid\')">Buka Hybrid Research Lab →</button></p></div><div class="card"><h2>Enterprise Roadmap (Secondary)</h2><p class="sub">Order basket analysis dan SKU-week forecasting memakai data simulasi. Validitas pada data perusahaan membutuhkan izin, kualitas historis penjualan, dan evaluasi terpisah.</p><span class="tag">No auto-sell / auto-restock</span></div></div>';
 }
 const sample="Customer membutuhkan rasa stroberi manis untuk minuman susu, halal dan cocok untuk produk dairy.";
 async function demoRequirement(){
@@ -173,6 +175,32 @@ async function runForecast(){
  $("forecastResult").innerHTML='<div class="grid"><div class="card"><div class="kpi-lbl">Next Week Forecast</div><div class="kpi">'+d.forecast[0].predicted_units+'</div><span class="small">Simulated units</span></div><div class="card"><div class="kpi-lbl">Rolling MAE</div><div class="kpi">'+d.metrics.rolling_mae_units+'</div><span class="small">Units</span></div><div class="card"><div class="kpi-lbl">Rolling WMAPE</div><div class="kpi">'+d.metrics.rolling_wmape_pct+'%</div><span class="small">On synthetic time-series</span></div><div class="card"><div class="kpi-lbl">Model</div><div class="kpi" style="font-size:17px">4-week MA</div><span class="small">Baseline · Not LLM</span></div></div>'+
  '<div class="card"><h2>SKU Demand — Synthetic History + Forecast</h2><div class="chart">'+bars.map(x=>'<div class="bar '+(x.pred?'pred':'')+'" style="height:'+Math.max(4,x.value/m*100)+'%" title="'+escapeHtml(x.week)+' · '+x.value+' units"></div>').join("")+'</div><div class="line"><span class="small">■ Blue: history (last 12 weeks)</span><span class="small" style="color:#129d88">■ Green: forecast ('+h+' weeks)</span></div><p class="note">'+escapeHtml(d.disclaimer)+'</p></div>';
  }catch(e){fail(e)}
+}
+async function hybridLab(){
+ const meta=await api("/v1/ai/hybrid-cases");
+ let info=headline("AI-02 / PRIMARY RESEARCH","Hybrid Semantic Matching Lab","Demonstrasi nyata BM25 + neural multilingual embeddings + Reciprocal Rank Fusion (RRF). Neural embedding dihitung sebelumnya pada GitHub Actions, hanya untuk query sintetis yang tersedia.");
+ if(!meta.available){
+  $("view").innerHTML=info+'<section class="card"><h2>Menunggu Model Embedding</h2><p class="sub">Aset embedding multilingual belum dibangun. API tidak menggunakan skor dense palsu atau fallback diam-diam. Setelah pipeline GitHub Actions berhasil, contoh query sintetis akan tersedia.</p><span class="tag unknown">NEURAL_ASSET_NOT_READY</span></section>';
+  return;
+ }
+ let opts=meta.cases.map(x=>'<option value="'+escapeHtml(x.id)+'">'+escapeHtml(x.id+' · '+x.text)+'</option>').join("");
+ $("view").innerHTML=info+
+  '<div class="grid"><div class="card"><div class="kpi-lbl">Encoder</div><div class="kpi" style="font-size:14px">Multilingual MiniLM</div><span class="small">Pretrained actual neural model</span></div><div class="card"><div class="kpi-lbl">Vector Dimension</div><div class="kpi">'+meta.dimensions+'</div></div><div class="card"><div class="kpi-lbl">Neural Inference</div><div class="kpi" style="font-size:16px">Offline · Cached</div><span class="small">No arbitrary live encoding</span></div><div class="card"><div class="kpi-lbl">Expert Validation</div><div class="kpi">Pending</div></div></div>'+
+  '<section class="card"><div class="toolbar"><h2>Hybrid Retrieval Test — Synthetic Queries</h2><span class="tag unknown">RESEARCH DEMO ONLY</span></div><label>Inquiry Demo (pre-embedded)</label><select id="hybridcase">'+opts+'</select><p class="note">'+escapeHtml(meta.notice)+'</p><div class="actions"><button class="btn" onclick="runHybridDemo()">Bandingkan BM25 / Dense / RRF</button><button class="btn secondary" onclick="navigate(\'inquiries\')">Buka Workflow ERP</button></div><div id="hybridresult"></div></section>'+
+  '<div class="grid two"><div class="card"><h2>Research Validity Boundary</h2><p class="sub">Ranking pada contoh developer-authored bukan evaluasi pakar. Untuk paper dibutuhkan label 0–3 dari Technical, pemisahan train/dev/test, baselines, nDCG@5, MRR, P95 latency end-to-end.</p></div><div class="card"><h2>Evidence & Provenance</h2><p class="sub">Atribut halal/regulatory selalu UNKNOWN tanpa dokumen terverifikasi. Tidak ada keputusan otomatis; rekomendasi perlu validasi Technical dan persetujuan Manager.</p></div></div>';
+ await runHybridDemo();
+}
+async function runHybridDemo(){
+ const area=$("hybridresult");
+ if(!area)return;
+ try{
+  const id=$("hybridcase").value;
+  const d=await api("/v1/ai/hybrid-evaluate?case_id="+encodeURIComponent(id));
+  const rankings=(title,arr)=>'<div class="card"><h3>'+title+'</h3><p class="small">'+arr.map((sku,i)=>(i+1)+'. '+escapeHtml(sku)).join(' · ')+'</p></div>';
+  area.innerHTML='<div style="margin-top:18px"><div class="grid"><div class="card"><div class="kpi-lbl">Model</div><div class="kpi" style="font-size:12px">'+escapeHtml(d.model_id)+'</div><div class="small">Revision '+escapeHtml(d.model_revision.slice(0,12))+'</div></div><div class="card"><div class="kpi-lbl">Query</div><div class="kpi" style="font-size:12px">'+escapeHtml(d.case_id)+'</div><div class="small">Synthetic authored case</div></div><div class="card"><div class="kpi-lbl">RRF Parameter</div><div class="kpi">k=60</div></div><div class="card"><div class="kpi-lbl">Measured Runtime</div><div class="kpi">'+escapeHtml(d.retrieval_only_latency_ms)+' ms</div><div class="small">Retrieval only; excludes neural encoding</div></div></div>'+
+  '<div class="grid">'+rankings("BM25 Ranking",d.lexical_skus)+rankings("Neural Dense Ranking",d.dense_skus)+rankings("Hybrid RRF Ranking",d.hybrid_skus)+'</div>'+
+  '<div class="card"><h2>RRF Candidate Ranking & Uncertainty</h2><div class="tablewrap"><table><thead><tr><th>Rank</th><th>SKU</th><th>BM25</th><th>Dense</th><th>Cosine</th><th>RRF Score</th><th>Evidence</th></tr></thead><tbody>'+d.ranked_candidates.map(x=>'<tr><td>#'+x.rank+'</td><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+x.bm25_rank+'</td><td>'+x.dense_rank+'</td><td>'+x.dense_cosine+'</td><td>'+x.rrf_score+'</td><td><span class="tag unknown">'+escapeHtml(x.constraint_status)+'</span></td></tr>').join("")+'</tbody></table></div><p class="note">'+escapeHtml(d.notes)+'</p><p class="note">Developer-authored illustrative label: '+escapeHtml(d.developer_authored_expected_sku)+' (not expert ground truth).</p></div></div>';
+ }catch(e){area.innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>';fail(e)}
 }
 async function users(){
  let users=await api("/v1/users");
