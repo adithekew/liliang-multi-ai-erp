@@ -212,6 +212,8 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "forecast":"SYNTHETIC_DEMO","data_classification":"SYNTHETIC_DEMO"}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
+from research.evidence import mount_research
+mount_research(app,current,get_db)
 from rich_ui import html_page
 
 @app.get("/",response_class=HTMLResponse,include_in_schema=False)
