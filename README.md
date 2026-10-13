@@ -4,6 +4,17 @@ Five-role internal ERP research pilot: Admin, Sales, Technical, Manager Operasio
 
 **Status:** Render Free demo, *not production*. Synthetic product and sales history only. Repo is currently public; no company data or secrets belong here.
 
+## v0.4 — Real multilingual neural embedding demonstration
+
+The new **Hybrid Semantic Lab** runs a genuine pretrained multilingual Sentence Transformers model **offline** on 5 synthetic flavor SKUs and 10 illustrative inquiries, records normalized 384-dimensional vectors, and compares BM25 / dense cosine / RRF (k=60) in Render Free **without hosting the heavyweight encoder**. The browser only evaluates pre-embedded synthetic cases: arbitrary user-entered ERP inquiries still use BM25 and are not passed to an online neural model.
+
+- Research methodology: [docs/HYBRID_SEMANTIC_RESEARCH.md](docs/HYBRID_SEMANTIC_RESEARCH.md)
+- Fixed neural assets: [research/fixtures/neural_synthetic_v1.json](research/fixtures/neural_synthetic_v1.json)
+- Reproducible generator: [scripts/generate_neural_fixtures.py](scripts/generate_neural_fixtures.py)
+- Expert-ready metrics: `research/metrics.py` (nDCG@K and MRR, requiring complete relevance judgments)
+- API: `GET /v1/ai/hybrid-cases`; `GET /v1/ai/hybrid-evaluate?case_id=Q01`
+- Research limitations: developer-authored labels are **not** expert ground truth, latency excludes offline inference, datasheet evidence and halal/regulatory attributes remain `UNKNOWN`, **no production AI claims**.
+
 ## v0.3 capabilities
 - ERP: session-based browser JWT login, RBAC, inquiry → BM25 Top-5 → Technical review → Manager approval; Admin user creation, audit events.
 - AI-01: deterministic Indonesian/English requirement extraction (baseline).
