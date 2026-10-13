@@ -4,7 +4,7 @@ on:
     branches:
       - feature/hybrid-neural-benchmark-v04
     paths:
-      - .github/workflows/build-neural-fixtures.yml
+      - scripts/generate_neural_fixtures.py
   workflow_dispatch:
 
 permissions:
@@ -46,4 +46,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research/fixtures/neural_synthetic_v1.json
           git diff --cached --quiet || git commit -m "research: record real multilingual vectors for 10 synthetic inquiries"
+          git fetch origin feature/hybrid-neural-benchmark-v04
+          git rebase origin/feature/hybrid-neural-benchmark-v04
           git push origin HEAD:feature/hybrid-neural-benchmark-v04
