@@ -35,27 +35,12 @@ DEMO=[
  ("FLV-CHOCO-04","Chocolate Flavor","Rich chocolate for dairy and bakery","chocolate","dairy"),
  ("FLV-LEMON-05","Lemon Flavor","Citrus lemon for cold beverages","lemon","beverage"),
 ]
+from persistence import connect as connect_database, install_schema, engine_name
 def connect():
-    # FastAPI yields sync dependencies and executes handlers in a worker threadpool.
-    # A request-scoped SQLite connection may be created and closed in different
-    # worker threads; keep one connection per request and allow that handoff.
-    db=sqlite3.connect(DB_PATH,timeout=20,check_same_thread=False)
-    db.row_factory=sqlite3.Row
-    db.execute("PRAGMA busy_timeout=20000")
-    db.execute("PRAGMA foreign_keys=ON")
-    return db
+    return connect_database()
 def boot():
-    Path(DB_PATH).parent.mkdir(parents=True,exist_ok=True)
     with connect() as db:
-        db.executescript("""
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT UNIQUE NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,hash TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY,sku TEXT UNIQUE,name TEXT,description TEXT,profile TEXT,application TEXT,stock REAL DEFAULT 0,source_ref TEXT);
-CREATE TABLE IF NOT EXISTS inquiries(id INTEGER PRIMARY KEY,requirement TEXT,customer_ref TEXT,created_by INTEGER,status TEXT DEFAULT 'NEW',created_at TEXT,FOREIGN KEY(created_by) REFERENCES users(id));
-CREATE TABLE IF NOT EXISTS runs(id INTEGER PRIMARY KEY,inquiry_id INTEGER,method TEXT,latency_ms INTEGER,created_at TEXT,FOREIGN KEY(inquiry_id) REFERENCES inquiries(id));
-CREATE TABLE IF NOT EXISTS candidates(id INTEGER PRIMARY KEY,run_id INTEGER,product_id INTEGER,score REAL,rank INTEGER,unknown TEXT,FOREIGN KEY(run_id) REFERENCES runs(id));
-CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,run_id INTEGER,product_id INTEGER,reviewer_id INTEGER,decision TEXT,label INTEGER,note TEXT);
-CREATE TABLE IF NOT EXISTS audits(id INTEGER PRIMARY KEY,actor_id INTEGER,action TEXT,entity TEXT,entity_id INTEGER,at TEXT);
-""")
+        install_schema(db)
         if not db.execute("SELECT id FROM users WHERE email=?",(ADMIN_EMAIL,)).fetchone():
             db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(ADMIN_EMAIL,"ERP Administrator","admin",ph.hash(ADMIN_PASSWORD)))
         for sku,name,desc,profile,application in DEMO:
@@ -110,11 +95,11 @@ class DecisionIn(BaseModel):
 class StockIn(BaseModel):
     stock_qty:float=Field(ge=0)
 @app.get("/healthz")
-def health():return {"status":"ok","environment":"DEMO","persistent_database":False}
+def health():return {"status":"ok","environment":"DEMO","persistent_database":engine_name()=="postgresql","database_backend":engine_name()}
 @app.get("/readyz")
 def ready(db=Depends(get_db)):
     db.execute("SELECT 1").fetchone()
-    return {"ready":True}
+    return {"ready":True,"database_backend":engine_name()}
 @app.post("/v1/auth/login")
 def login(data:Login,db=Depends(get_db)):
     u=db.execute("SELECT * FROM users WHERE email=?",(data.email.lower().strip(),)).fetchone()
@@ -137,7 +122,10 @@ def add_user(data:NewUser,u=Depends(permit("admin")),db=Depends(get_db)):
             cur=db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(data.email.lower().strip(),data.name,data.role,ph.hash(data.password)))
             audit(db,u,"CREATE_USER","user",cur.lastrowid)
         return {"id":cur.lastrowid,"role":data.role}
-    except sqlite3.IntegrityError:raise HTTPException(409,"Email already exists")
+    except Exception as exc:
+        if isinstance(exc, sqlite3.IntegrityError) or getattr(exc,"sqlstate",None)=="23505":
+            raise HTTPException(409,"Email already exists")
+        raise
 @app.get("/v1/users")
 def users(u=Depends(permit("admin")),db=Depends(get_db)):
     return [dict(x) for x in db.execute("SELECT id,email,name,role FROM users ORDER BY id").fetchall()]
