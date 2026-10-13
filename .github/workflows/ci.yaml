@@ -5,6 +5,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pilot_test
+          POSTGRES_PASSWORD: pilot_test_pw
+          POSTGRES_DB: liliang_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pilot_test -d liliang_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,4 +29,12 @@ jobs:
       - run: python tests/extract_ui_js.py
       - run: node --check /tmp/liliang_ui_ci.js
       - run: python -m unittest discover -s tests -v
+      - name: PostgreSQL integration smoke test
+        env:
+          DATABASE_URL: postgresql://pilot_test:pilot_test_pw@127.0.0.1:5432/liliang_ci
+          APP_ENV: pilot
+          ADMIN_EMAIL: ci-db-admin@example.local
+          ADMIN_PASSWORD: ci-local-only-strong-password
+          SECRET_KEY: local-ci-jwt-signing-key-32-chars-minimum
+        run: python -m unittest tests/postgres_integration.py -v
       - run: python -c "import os; os.environ.update(ADMIN_EMAIL='admin@test.local', ADMIN_PASSWORD='ci-test-strong-pass-001', SECRET_KEY='a-ci-token-signing-key-32chars-or-more', DATABASE_PATH='/tmp/liliang-ci.db'); from fastapi.testclient import TestClient; from app import app; from contextlib import ExitStack; ctx=TestClient(app); ctx.__enter__(); assert ctx.get('/healthz').status_code==200; assert ctx.get('/readyz').json()['ready'] is True; r=ctx.post('/v1/auth/login',json={'email':'admin@test.local','password':'ci-test-strong-pass-001'}); assert r.status_code==200,r.text; h={'Authorization':'Bearer '+r.json()['access_token']}; assert len(ctx.get('/v1/products',headers=h).json())==5; ctx.__exit__(None,None,None)"
