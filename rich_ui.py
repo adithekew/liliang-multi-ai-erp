@@ -59,6 +59,7 @@ function loginScreen(){
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
  ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
+ ["research","▤","AI Research Evidence","AI MODULES"],
  ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
@@ -69,6 +70,7 @@ const menu=[
 function allowed(key){
  if(key==="users")return me.role==="admin";
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
+ if(key==="research")return ["admin","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
  if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
  return true;
@@ -79,7 +81,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<button class="navitem '+(page===x[0]?"active":"")+'" data-go="'+x[0]+'"><span>'+x[1]+'</span>'+x[2]+'</button>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.4 · Synthetic research demo<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Koneksi database dapat berupa SQLite sementara atau PostgreSQL persisten; cek /readyz.</div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.5 · Synthetic research evidence<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Koneksi database dapat berupa SQLite sementara atau PostgreSQL persisten; cek /readyz.</div><div id="view"></div></main></div></div>';
  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navigate(b.dataset.go));
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -89,7 +91,7 @@ async function enter(){
 }
 async function navigate(p){if(!allowed(p))return;page=p;frame();await show()}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -201,6 +203,36 @@ async function runHybridDemo(){
   '<div class="grid">'+rankings("BM25 Ranking",d.lexical_skus)+rankings("Neural Dense Ranking",d.dense_skus)+rankings("Hybrid RRF Ranking",d.hybrid_skus)+'</div>'+
   '<div class="card"><h2>RRF Candidate Ranking & Uncertainty</h2><div class="tablewrap"><table><thead><tr><th>Rank</th><th>SKU</th><th>BM25</th><th>Dense</th><th>Cosine</th><th>RRF Score</th><th>Evidence</th></tr></thead><tbody>'+d.ranked_candidates.map(x=>'<tr><td>#'+x.rank+'</td><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+x.bm25_rank+'</td><td>'+x.dense_rank+'</td><td>'+x.dense_cosine+'</td><td>'+x.rrf_score+'</td><td><span class="tag unknown">'+escapeHtml(x.constraint_status)+'</span></td></tr>').join("")+'</tbody></table></div><p class="note">'+escapeHtml(d.notes)+'</p><p class="note">Developer-authored illustrative label: '+escapeHtml(d.developer_authored_expected_sku)+' (not expert ground truth).</p></div></div>';
  }catch(e){area.innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>';fail(e)}
+}
+async function researchEvidence(){
+ const [m,r,e]=await Promise.all([
+    api("/v1/research/methodology"),api("/v1/research/readiness"),api("/v1/research/evaluation")
+ ]);
+ const kpi=(caption,n,detail)=>'<div class="card"><div class="kpi-lbl">'+caption+'</div><div class="kpi">'+escapeHtml(n)+'</div><span class="small">'+detail+'</span></div>';
+ const steps=m.pipeline.map((step,i)=>'<div style="display:flex;gap:12px;align-items:start;padding:10px 0;border-bottom:1px solid #ecf0f5"><span class="tag">'+(i+1)+'</span><span class="small" style="color:#263b57;font-size:12px">'+escapeHtml(step)+'</span></div>').join("");
+ const stages=m.models.map(x=>'<tr><td><b>'+escapeHtml(x.name)+'</b></td><td>'+escapeHtml(x.mechanism)+'</td><td><span class="tag unknown">'+escapeHtml(x.deployment)+'</span></td><td>'+ (x.trained_on_company_data?'YES':'NO')+'</td></tr>').join("");
+ const gateLabels={"all_evaluation_candidates_judged":"Semua kandidat mempunyai label","independent_expert_review_proven":"Independent expert review","heldout_split_verified":"Locked held-out test set","label_adjudication_completed":"Expert adjudication","representative_company_dataset_available":"Dataset representatif perusahaan","paired_bm25_dense_hybrid_same_queries":"Paired BM25 / dense / hybrid"};
+ let gates=Object.entries(r.gates).map(([key,ok])=>'<tr><td>'+escapeHtml(gateLabels[key]||key)+'</td><td><span class="tag '+(ok?'':'unknown')+'">'+(ok?'VERIFIED':'PENDING')+'</span></td></tr>').join("");
+ const scores=e.results.length?e.results.map(x=>'<tr><td>'+escapeHtml(x.method)+'</td><td>'+x.fully_judged_runs+'</td><td>'+x.exploratory_mean_ndcg_at_5+'</td><td>'+x.exploratory_mrr_at_5+'</td><td><span class="tag unknown">Exploratory only</span></td></tr>').join(""):'<tr><td colspan="5" class="empty">Belum ada run dengan semua kandidat diberi label Technical 0–3. Tidak ada klaim akurasi.</td></tr>';
+ const rubric=Object.entries(r.expert_rubric).map(([label,meaning])=>'<tr><td><b>'+label+'</b></td><td>'+escapeHtml(meaning)+'</td></tr>').join("");
+ $("view").innerHTML=headline("RESEARCH / SCIENTIFIC VALIDATION","AI Research Evidence & Model Evaluation",
+ "Halaman transparansi akademik: data cleansing, model ML, training, label pakar, kesiapan dataset, dan hasil pengujian. Angka sintetis tidak boleh disebut akurasi PT. Liliang.")+
+ '<div class="warning"><strong>RESEARCH STATUS: NOT VALIDATED.</strong> Pretrained neural model sudah dijalankan pada 10 inquiry sintetis. Model belum fine-tuned dengan data PT. Liliang, belum ada expert-labelled held-out set, dan belum ada bukti percepatan kerja.</div>'+
+ '<div class="grid">'+kpi("Workflow Matching Runs",r.evaluation_runs_total,"Data pilot tersimpan")+
+ kpi("Fully Expert-Labelled Runs",r.fully_labelled_runs,"Setiap kandidat harus dinilai")+
+ kpi("Candidate Review Coverage",r.candidate_label_coverage_pct+"%","Cakupan review, BUKAN akurasi")+
+ kpi("Validated Model",0,"Belum ada hasil held-out")+'</div>'+
+ '<div class="grid two"><div class="card"><h2>1. Dataset Cleansing & Preparation</h2><p class="sub">Audit asal data dan izin → schema validation → missing value / UNKNOWN → PII quarantine → Unicode & sinonim ID/EN → deduplication → taxonomy/SKU matching → leakage-safe split → dataset fingerprint → review Technical.</p>'+
+ '<h3 style="margin-top:18px">Reproducible Processing Pipeline</h3>'+steps+
+ '<p class="note">Audit data dilakukan di modul research/data_pipeline.py. Pipeline pengujian memakai data sintetis, bukan dataset internal perusahaan.</p></div>'+
+ '<div class="card"><h2>2. Machine Learning & Training</h2><p class="sub"><b>Current:</b> Multilingual MiniLM sebagai pretrained encoder (frozen, 384 dimensi); BM25 lexical; RRF deterministic. Tidak ada supervised fine-tuning pada data PT. Liliang.</p>'+
+ '<div class="tablewrap"><table><thead><tr><th>Model</th><th>Methods</th><th>Deployment</th><th>Company-trained?</th></tr></thead><tbody>'+stages+'</tbody></table></div>'+
+ '<h3 style="margin-top:16px">Rencana Fine-tuning</h3><p class="small">'+escapeHtml(m.training_plan.fine_tune_algorithm)+'. Dataset menggunakan pasangan inquiry–SKU berlabel pakar dan split berdasarkan proyek/customer dan waktu. Model harus mengungguli baseline held-out sebelum deployment.</p></div></div>'+
+ '<div class="grid two"><div class="card"><h2>3. Technical Labeling Rubric (0–3)</h2><div class="tablewrap"><table><thead><tr><th>Grade</th><th>Judgment</th></tr></thead><tbody>'+rubric+'</tbody></table></div><p class="note">Penilaian relevansi berbeda dari tombol ACCEPT/REJECT sebagai keputusan workflow. Kasus NEEDS_INFO tidak dianggap label final.</p><button class="btn secondary" onclick="navigate(\'inquiries\')">Buka Inquiry & Technical Review →</button></div>'+
+ '<div class="card"><h2>4. Scientific Readiness Gates</h2><div class="tablewrap"><table><thead><tr><th>Evaluation requirement</th><th>Status</th></tr></thead><tbody>'+gates+'</tbody></table></div><p class="note">Cakupan review tidak membuktikan akurasi; evaluasi yang sah membutuhkan expert labels, held-out test, dan paired comparison.</p></div></div>'+
+ '<section class="card"><div class="toolbar"><h2>5. Model Performance Evidence</h2><span class="tag unknown">'+escapeHtml(e.status)+'</span></div><div class="tablewrap"><table><thead><tr><th>Method</th><th>Fully judged</th><th>Mean nDCG@5</th><th>MRR@5</th><th>Claim</th></tr></thead><tbody>'+scores+'</tbody></table></div><p class="note">nDCG@5 & MRR@5 are calculated only when the complete candidate set has valid 0–3 expert labels. Results remain exploratory until independent held-out testing.</p>'+
+ '<p class="note">'+escapeHtml(e.warnings.join(' '))+'</p></section>'+
+ '<div class="card"><h2>6. Jawaban untuk Dosen Pembimbing</h2><p class="sub"><b>Akurasi:</b> belum diklaim; diuji dengan nDCG@5/MRR pada gold standard Technical.<br><b>Training:</b> model MiniLM pretrained eksternal; PT. Liliang fine-tuning belum dilakukan.<br><b>Cleansing:</b> normalisasi, karantina PII, dedup, validasi atribut dan split anti-leakage.<br><b>Keunggulan ML:</b> pretrained embeddings menangkap kemiripan semantik lintas bahasa; BM25 efisien untuk istilah exact; RRF memadukan ranking tanpa menyamakan skala skornya.</p><p class="note">Kesimpulan efektivitas memerlukan eksperimen E1–E5 pada dataset yang mendapat izin dan label pakar.</p></div>';
 }
 async function users(){
  let users=await api("/v1/users");
