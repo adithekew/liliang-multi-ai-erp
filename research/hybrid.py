@@ -28,7 +28,7 @@ def assess_candidate(candidate,required):
         if expected is None:
             continue
         actual=evidence.get(attribute)
-        if actual is None or actual.get("status") in ("UNKNOWN",None):
+        if actual is None or actual.get("status") != "VERIFIED":
             issues.append({"attribute":attribute,"status":"UNKNOWN",
                            "reason":"No verified evidence; cannot claim compatibility."})
         elif actual.get("value")!=expected:
