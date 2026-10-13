@@ -8,6 +8,8 @@ class RetrievalMetricsTest(unittest.TestCase):
         self.assertLess(ndcg_at_k(["C","B","A"],labels,3),1.0)
     def test_mrr_first_relevant_at_second(self):
         self.assertEqual(reciprocal_rank(["B","A","C"],{"A":3,"B":0,"C":0}),.5)
+    def test_weak_grade_one_is_not_binary_relevant_for_mrr(self):
+        self.assertEqual(reciprocal_rank(["B","A","C"],{"A":3,"B":1,"C":0}),.5)
     def test_no_implicit_zero_for_unjudged_items(self):
         with self.assertRaisesRegex(ValueError,"Missing expert judgment"):
             ndcg_at_k(["A","B"],{"A":3})
