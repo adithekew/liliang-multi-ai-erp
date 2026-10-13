@@ -151,6 +151,31 @@ def methodology():
         "training_honesty":"Pretrained model learning occurred upstream; no model weights have been fine-tuned on PT Liliang data."
     }
 
+def synthetic_quality_report():
+    """Auditable 5-SKU/10-inquiry cleaning demonstration (not company data)."""
+    from research.hybrid_demo import load_fixture
+    from research.data_pipeline import prepare_synthetic, grouped_split
+    data=load_fixture()
+    if not data:
+        return {"status":"NEURAL_SYNTHETIC_FIXTURE_UNAVAILABLE","company_data_used":False}
+    catalog=[{**p,"data_classification":"SYNTHETIC_EXAMPLES_ONLY"} for p in data["products"]]
+    inquiries=[{"requirement":q["text"],"created_at":f"2026-01-{i+1:02d}",
+                "project_group":"demo-"+q["id"],
+                "data_classification":"SYNTHETIC_EXAMPLES_ONLY"}
+               for i,q in enumerate(data["queries"])]
+    result=prepare_synthetic(catalog,inquiries)
+    cleaned=result["inquiries"]["clean"]
+    split=grouped_split(cleaned) if len(cleaned)>=3 else None
+    return {
+        "status":"SYNTHETIC_QA_ONLY",
+        "product_quality":result["products"]["quality"],
+        "inquiry_quality":result["inquiries"]["quality"],
+        "split_counts":split["record_counts"] if split else None,
+        "split_policy":split["policy"] if split else "INCOMPLETE",
+        "company_data_used":False,
+        "warning":"Demo quality scores on developer-authored records are NOT evidence of actual company data quality or model accuracy."
+    }
+
 def mount_research(app,current,get_db):
     from fastapi import Depends, HTTPException
     def permit_research(u):
@@ -164,6 +189,10 @@ def mount_research(app,current,get_db):
     def research_readiness(u=Depends(current),db=Depends(get_db)):
         permit_research(u)
         return readiness(db)
+    @app.get("/v1/research/quality-demo")
+    def research_quality(u=Depends(current)):
+        permit_research(u)
+        return synthetic_quality_report()
     @app.get("/v1/research/evaluation")
     def research_evaluation(u=Depends(current),db=Depends(get_db)):
         permit_research(u)
