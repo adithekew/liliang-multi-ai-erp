@@ -54,7 +54,7 @@ def to_dict(row):return dict(row) if row is not None else None
 async def lifespan(app):
     boot()
     yield
-app=FastAPI(title="PT Liliang ERP Multi-AI — DEMO PILOT",version="0.1.0",lifespan=lifespan)
+app=FastAPI(title="PT Liliang ERP Multi-AI — DEMO PILOT",version="0.5.0",lifespan=lifespan)
 def get_db():
     db=connect()
     try: yield db
@@ -172,7 +172,7 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
         db.execute("UPDATE inquiries SET status='MATCHED' WHERE id=?",(iid,))
         audit(db,u,"MATCH_BASELINE","run",run.lastrowid)
     return {"run_id":run.lastrowid,"method":"bm25-expert-review-demo-v0.2","latency_ms":elapsed,
-            "candidates":candidates,"notice":"BM25 lexical retrieval demo only: neural embeddings, factual evidence and validation pending. Technical review required."}
+            "candidates":candidates,"notice":"BM25-only operational shortlist. Score is uncalibrated relevance, NOT accuracy or suitability probability. Neural evaluation is separate in Hybrid Semantic Lab. Technical review required."}
 @app.get("/v1/matches/{rid}")
 def show_match(rid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
     q=db.execute("SELECT r.*,i.created_by FROM runs r JOIN inquiries i ON i.id=r.inquiry_id WHERE r.id=?",(rid,)).fetchone()
