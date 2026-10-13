@@ -205,8 +205,8 @@ async function runHybridDemo(){
  }catch(e){area.innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>';fail(e)}
 }
 async function researchEvidence(){
- const [m,r,e]=await Promise.all([
-    api("/v1/research/methodology"),api("/v1/research/readiness"),api("/v1/research/evaluation")
+ const [m,r,e,q]=await Promise.all([
+    api("/v1/research/methodology"),api("/v1/research/readiness"),api("/v1/research/evaluation"),api("/v1/research/quality-demo")
  ]);
  const kpi=(caption,n,detail)=>'<div class="card"><div class="kpi-lbl">'+caption+'</div><div class="kpi">'+escapeHtml(n)+'</div><span class="small">'+detail+'</span></div>';
  const steps=m.pipeline.map((step,i)=>'<div style="display:flex;gap:12px;align-items:start;padding:10px 0;border-bottom:1px solid #ecf0f5"><span class="tag">'+(i+1)+'</span><span class="small" style="color:#263b57;font-size:12px">'+escapeHtml(step)+'</span></div>').join("");
@@ -223,7 +223,7 @@ async function researchEvidence(){
  kpi("Candidate Review Coverage",r.candidate_label_coverage_pct+"%","Cakupan review, BUKAN akurasi")+
  kpi("Validated Model",0,"Belum ada hasil held-out")+'</div>'+
  '<div class="grid two"><div class="card"><h2>1. Dataset Cleansing & Preparation</h2><p class="sub">Audit asal data dan izin → schema validation → missing value / UNKNOWN → PII quarantine → Unicode & sinonim ID/EN → deduplication → taxonomy/SKU matching → leakage-safe split → dataset fingerprint → review Technical.</p>'+
- '<h3 style="margin-top:18px">Reproducible Processing Pipeline</h3>'+steps+
+ '<p class="small">Validated SYNTHETIC records: '+escapeHtml(q.product_quality?.accepted??"N/A")+' products; '+escapeHtml(q.inquiry_quality?.accepted??"N/A")+' inquiries; quarantined: '+escapeHtml(q.product_quality?.quarantined??"N/A")+' products / '+escapeHtml(q.inquiry_quality?.quarantined??"N/A")+' inquiries. These figures are NOT company data.</p><h3 style="margin-top:18px">Reproducible Processing Pipeline</h3>'+steps+
  '<p class="note">Audit data dilakukan di modul research/data_pipeline.py. Pipeline pengujian memakai data sintetis, bukan dataset internal perusahaan.</p></div>'+
  '<div class="card"><h2>2. Machine Learning & Training</h2><p class="sub"><b>Current:</b> Multilingual MiniLM sebagai pretrained encoder (frozen, 384 dimensi); BM25 lexical; RRF deterministic. Tidak ada supervised fine-tuning pada data PT. Liliang.</p>'+
  '<div class="tablewrap"><table><thead><tr><th>Model</th><th>Methods</th><th>Deployment</th><th>Company-trained?</th></tr></thead><tbody>'+stages+'</tbody></table></div>'+
