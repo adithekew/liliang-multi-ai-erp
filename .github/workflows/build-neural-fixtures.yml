@@ -1,0 +1,49 @@
+name: Build Synthetic Neural Embedding Fixtures
+on:
+  push:
+    branches:
+      - feature/hybrid-neural-benchmark-v04
+    paths:
+      - .github/workflows/build-neural-fixtures.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual multilingual encoder
+        run: pip install --no-cache-dir "sentence-transformers>=3,<6"
+      - name: Encode only synthetic products and query examples
+        run: python scripts/generate_neural_fixtures.py
+      - name: Verify provenance and normalized vector dimensions
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("research/fixtures/neural_synthetic_v1.json").read_text())
+          assert d["data_scope"]=="SYNTHETIC_EXAMPLES_ONLY"
+          assert d["encoder_type"]=="REAL_PRETRAINED_NEURAL_MULTILINGUAL_SENTENCE_TRANSFORMER"
+          assert len(d["products"])==5 and len(d["queries"])==10
+          assert d["dimensions"]>=128 and len(d["model_revision"])>=25
+          print("Neural fixture validation PASSED")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-neural-embeddings
+          path: research/fixtures/neural_synthetic_v1.json
+      - name: Commit synthetic neural vectors to feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/fixtures/neural_synthetic_v1.json
+          git diff --cached --quiet || git commit -m "research: record real multilingual vectors for 10 synthetic inquiries"
+          git push origin HEAD:feature/hybrid-neural-benchmark-v04
