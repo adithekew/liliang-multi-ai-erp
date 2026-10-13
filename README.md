@@ -4,6 +4,16 @@ Five-role internal ERP research pilot: Admin, Sales, Technical, Manager Operasio
 
 **Status:** Render Free demo, *not production*. Synthetic product and sales history only. Repo is currently public; no company data or secrets belong here.
 
+## v0.5 — Research evidence, data quality and supervised-training readiness
+
+- **Research Evidence** page (Admin / Technical / Manager) displays real Technical label coverage, 0–3 expert rubric, synthetic dataset cleaning QA, comparative readiness gates and training status. With no gold-standard labels, the page explicitly reports **no validated accuracy**.
+- Read-only endpoints: \`GET /v1/research/methodology\`, \`GET /v1/research/readiness\`, \`GET /v1/research/evaluation\`, \`GET /v1/research/quality-demo\`.
+- Research lab computes exploratory nDCG@5 and MRR@5 **only** for complete, consistent expert-labeled candidate sets. MRR considers grades 2–3 relevant. It does not make held-out or generalizability claims.
+- Research data cleansing includes schema checks, SKU canonicalization, Indonesian/English alias normalization, duplicate controls, PII quarantine and anti-leakage group/time splitting. It defaults to **synthetic/approved-only** records.
+- Optional offline supervised domain adaptation: \`research/training_gate.py\` and \`research/finetune_encoder.py\` require authorized, anonymized Technical-labelled pairs, enough examples and group diversity, and local written permission. **No PT Liliang data has been fine-tuned.** Training code does not run automatically.
+- Lecturer-response / defense handout: [AI Methodology Defense — 16 October 2026](docs/AI_METHODOLOGY_DEFENSE_16_OCT_2026.md).
+- None of these additions modify the existing Neon ERP schema or create/overwrite company records.
+
 ## v0.4 — Real multilingual neural embedding demonstration
 
 The new **Hybrid Semantic Lab** runs a genuine pretrained multilingual Sentence Transformers model **offline** on 5 synthetic flavor SKUs and 10 illustrative inquiries, records normalized 384-dimensional vectors, and compares BM25 / dense cosine / RRF (k=60) in Render Free **without hosting the heavyweight encoder**. The browser only evaluates pre-embedded synthetic cases: arbitrary user-entered ERP inquiries still use BM25 and are not passed to an online neural model.
