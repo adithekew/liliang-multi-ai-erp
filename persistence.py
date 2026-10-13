@@ -91,7 +91,10 @@ def connect():
             raise RuntimeError("DATABASE_URL must use a PostgreSQL connection URI")
         import psycopg
         from psycopg.rows import dict_row
-        raw=psycopg.connect(uri,row_factory=dict_row,connect_timeout=12,sslmode="require")
+        # Only loopback development can negotiate non-TLS local PostgreSQL.
+        # Remote Neon connections always require TLS encryption.
+        sslmode="prefer" if urlsplit(uri).hostname in ("localhost","127.0.0.1") else "require"
+        raw=psycopg.connect(uri,row_factory=dict_row,connect_timeout=12,sslmode=sslmode)
         return PgConnection(raw)
     path=getenv("DATABASE_PATH","/tmp/liliang-erp-pilot.db")
     Path(path).parent.mkdir(parents=True,exist_ok=True)
