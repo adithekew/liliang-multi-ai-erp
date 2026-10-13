@@ -7,8 +7,9 @@ tune, or select a model on a held-out test split.
 from math import log2
 
 def reciprocal_rank(ranked, relevance, k=5):
+    """First sufficiently relevant (grade 2 or 3) item, not weak grade 1."""
     _validate(ranked,relevance,k)
-    return next((1.0/i for i,sku in enumerate(ranked[:k],1) if relevance[sku]>0),0.0)
+    return next((1.0/i for i,sku in enumerate(ranked[:k],1) if relevance[sku]>=2),0.0)
 
 def dcg_at_k(ranked, relevance, k=5):
     _validate(ranked,relevance,k)
