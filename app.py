@@ -206,8 +206,8 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
     return {"status":status}
 @app.get("/v1/analytics/summary")
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
-    return {"product_count":db.execute("SELECT COUNT(*) FROM products").fetchone()[0],
-            "inquiry_count":db.execute("SELECT COUNT(*) FROM inquiries").fetchone()[0],
+    return {"product_count":db.execute("SELECT COUNT(*) AS total FROM products").fetchone()["total"],
+            "inquiry_count":db.execute("SELECT COUNT(*) AS total FROM inquiries").fetchone()["total"],
             "ai_matching":"LEXICAL_BASELINE_ONLY","bundling":"SYNTHETIC_DEMO",
             "forecast":"SYNTHETIC_DEMO","data_classification":"SYNTHETIC_DEMO"}
 from multi_ai import mount_ai, score_products
