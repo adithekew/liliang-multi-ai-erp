@@ -43,12 +43,18 @@ def boot():
         install_schema(db)
         if not db.execute("SELECT id FROM users WHERE email=?",(ADMIN_EMAIL,)).fetchone():
             db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(ADMIN_EMAIL,"ERP Administrator","admin",ph.hash(ADMIN_PASSWORD)))
-        for sku,name,desc,profile,application in DEMO:
-            db.execute("INSERT OR IGNORE INTO products(sku,name,description,profile,application,stock,source_ref) VALUES(?,?,?,?,?,?,?)",
-                       (sku,name,desc,profile,application,0,"DEMO-ONLY"))
+        # An archived reset is a durable marker: do not re-seed demo products on restart.
+        archived=db.execute("SELECT 1 FROM reset_archives LIMIT 1").fetchone()
+        imported=db.execute("SELECT 1 FROM catalog_import_batches LIMIT 1").fetchone()
+        if not archived and not imported:
+            for sku,name,desc,profile,application in DEMO:
+                db.execute("INSERT OR IGNORE INTO products(sku,name,description,profile,application,stock,source_ref) VALUES(?,?,?,?,?,?,?)",
+                           (sku,name,desc,profile,application,0,"DEMO-ONLY"))
 def now():return datetime.now(timezone.utc).isoformat()
-def audit(db,user,action,entity,id):
+def audit(db,user,action,entity,id,before=None,after=None):
     db.execute("INSERT INTO audits(actor_id,action,entity,entity_id,at) VALUES(?,?,?,?,?)",(user["id"],action,entity,id,now()))
+    from enterprise_ops import append_event
+    return append_event(db,user,action,entity,id,before=before,after=after)
 def to_dict(row):return dict(row) if row is not None else None
 @asynccontextmanager
 async def lifespan(app):
@@ -134,17 +140,18 @@ def products(u=Depends(current),db=Depends(get_db)):
     return [dict(x) for x in db.execute("SELECT * FROM products ORDER BY sku").fetchall()]
 @app.patch("/v1/products/{pid}/stock")
 def stock(pid:int,data:StockIn,u=Depends(permit("admin","gudang")),db=Depends(get_db)):
+    previous=db.execute("SELECT stock FROM products WHERE id=?",(pid,)).fetchone()
     with db:
         c=db.execute("UPDATE products SET stock=? WHERE id=?",(data.stock_qty,pid))
         if not c.rowcount:raise HTTPException(404,"SKU not found")
-        audit(db,u,"STOCK_UPDATE","product",pid)
+        audit(db,u,"STOCK_UPDATE","product",pid,before={"stock":previous["stock"] if previous else None},after={"stock":data.stock_qty})
     return {"product_id":pid,"stock_qty":data.stock_qty}
 @app.post("/v1/inquiries",status_code=201)
 def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get_db)):
     with db:
         cur=db.execute("INSERT INTO inquiries(requirement,customer_ref,created_by,status,created_at) VALUES(?,?,?,'NEW',?)",
                 (data.requirement,data.customer_ref,u["id"],now()))
-        audit(db,u,"NEW_INQUIRY","inquiry",cur.lastrowid)
+        audit(db,u,"NEW_INQUIRY","inquiry",cur.lastrowid,after={"status":"NEW","requirement_recorded":True})
     return {"id":cur.lastrowid,"status":"NEW"}
 @app.get("/v1/inquiries")
 def inquiries(u=Depends(current),db=Depends(get_db)):
@@ -170,7 +177,7 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
             db.execute("INSERT INTO candidates(run_id,product_id,score,rank,unknown) VALUES(?,?,?,?,?)",
                      (run.lastrowid,item["product_id"],item["score"],rank,",".join(item["unknown_attributes"])))
         db.execute("UPDATE inquiries SET status='MATCHED' WHERE id=?",(iid,))
-        audit(db,u,"MATCH_BASELINE","run",run.lastrowid)
+        audit(db,u,"MATCH_BASELINE","run",run.lastrowid,after={"method":"BM25","candidate_count":len(candidates),"latency_ms":elapsed})
     return {"run_id":run.lastrowid,"method":"bm25-expert-review-demo-v0.2","latency_ms":elapsed,
             "candidates":candidates,"notice":"BM25-only operational shortlist. Score is uncalibrated relevance, NOT accuracy or suitability probability. Neural evaluation is separate in Hybrid Semantic Lab. Technical review required."}
 @app.get("/v1/matches/{rid}")
@@ -188,7 +195,7 @@ def review(rid:int,data:ReviewIn,u=Depends(permit("technical")),db=Depends(get_d
         cur=db.execute("INSERT INTO reviews(run_id,product_id,reviewer_id,decision,label,note) VALUES(?,?,?,?,?,?)",
                        (rid,data.product_id,u["id"],data.decision,data.relevance_label,data.rationale))
         db.execute("UPDATE inquiries SET status='TECH_REVIEWED' WHERE id=?",(q["inquiry_id"],))
-        audit(db,u,"EXPERT_REVIEW","review",cur.lastrowid)
+        audit(db,u,"EXPERT_REVIEW","review",cur.lastrowid,after={"label":data.relevance_label,"decision":data.decision,"run_id":rid,"product_id":data.product_id})
     return {"review_id":cur.lastrowid,"status":"TECH_REVIEWED"}
 @app.post("/v1/inquiries/{iid}/decision")
 def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depends(get_db)):
@@ -202,7 +209,7 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
     status="APPROVED" if data.decision=="APPROVE" else "RETURNED"
     with db:
         db.execute("UPDATE inquiries SET status=? WHERE id=?",(status,iid))
-        audit(db,u,"MANAGER_"+data.decision,"inquiry",iid)
+        audit(db,u,"MANAGER_"+data.decision,"inquiry",iid,before={"status":q["status"]},after={"status":status})
     return {"status":status}
 @app.get("/v1/analytics/summary")
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
@@ -214,6 +221,8 @@ from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
 from research.evidence import mount_research
 mount_research(app,current,get_db)
+from enterprise_ops import mount_enterprise
+mount_enterprise(app,current,get_db,audit,ph)
 from rich_ui import html_page
 
 @app.get("/",response_class=HTMLResponse,include_in_schema=False)
