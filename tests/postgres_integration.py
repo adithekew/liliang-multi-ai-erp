@@ -21,6 +21,14 @@ class PostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(summary.headers["content-type"].split(";")[0],"application/json")
             self.assertEqual(summary.json()["product_count"],5)
             self.assertEqual(summary.json()["inquiry_count"],0)
+            ai_status=c.get("/v1/ai/system-status",headers=headers)
+            self.assertEqual(ai_status.status_code,200,ai_status.text)
+            self.assertEqual(ai_status.json()["database_backend"],"postgresql")
+            self.assertTrue(ai_status.json()["persistent_database"])
+            self.assertEqual(ai_status.json()["product_count"],5)
+            self.assertFalse(ai_status.json()["model_validated_for_company"])
+            self.assertFalse(ai_status.json()["production_ready"])
+
             for path in [
                 "/v1/ai/capabilities",
                 "/v1/ai/bundling",
