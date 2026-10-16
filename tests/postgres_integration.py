@@ -55,8 +55,99 @@ class PostgresIntegrationTest(unittest.TestCase):
             post_summary=c.get("/v1/analytics/summary",headers=headers)
             self.assertEqual(post_summary.status_code,200,post_summary.text)
             self.assertEqual(post_summary.json()["inquiry_count"],1)
-        db=connect()
-        try:self.assertIsNotNone(db.execute("SELECT id FROM inquiries WHERE id=?",(iid,)).fetchone())
-        finally:db.close()
+            # Five real login sessions on ephemeral CI PostgreSQL, RBAC and workflow.
+            provision=c.post("/v1/admin/uat/bootstrap",headers=headers,
+                             json={"confirmation":"CREATE UAT ROLES"})
+            self.assertEqual(provision.status_code,200,provision.text)
+            self.assertEqual(len(provision.json()["roles"]),4)
+            role_headers={}
+            for row in provision.json()["roles"]:
+                auth=c.post("/v1/auth/login",json={
+                    "email":row["email"],"password":row["password_once"]})
+                self.assertEqual(auth.status_code,200,auth.text)
+                role_headers[row["role"]]={"Authorization":"Bearer "+auth.json()["access_token"]}
+            again=c.post("/v1/admin/uat/bootstrap",headers=headers,
+                         json={"confirmation":"CREATE UAT ROLES"})
+            self.assertTrue(all("password_once" not in x for x in again.json()["roles"]))
+            self.assertEqual(c.get("/v1/admin/catalog/reset-preview",headers=role_headers["sales"]).status_code,403)
+            no_review=c.post(f"/v1/inquiries/{iid}/decision",headers=role_headers["manager"],
+                             json={"decision":"APPROVE","note":"Before Technical review"})
+            self.assertEqual(no_review.status_code,409)
+            chosen=m.json()["candidates"][0]
+            reviewed=c.post(f'/v1/matches/{m.json()["run_id"]}/review',
+                            headers=role_headers["technical"],
+                            json={"product_id":chosen["product_id"],
+                                  "decision":"ACCEPT","relevance_label":3,
+                                  "rationale":"Expert UAT validation with no company data"})
+            self.assertEqual(reviewed.status_code,200,reviewed.text)
+            decision=c.post(f"/v1/inquiries/{iid}/decision",headers=role_headers["manager"],
+                            json={"decision":"APPROVE","note":"Technical candidate accepted"})
+            self.assertEqual(decision.status_code,200,decision.text)
+            inventory=c.patch(f'/v1/products/{chosen["product_id"]}/stock',
+                              headers=role_headers["gudang"],json={"stock_qty":10})
+            self.assertEqual(inventory.status_code,200,inventory.text)
+            events=c.get("/v1/admin/audit-events",headers=headers)
+            self.assertEqual(events.status_code,200,events.text)
+            actions={e["action"] for e in events.json()["events"]}
+            self.assertTrue({"CREATE_UAT_USER","NEW_INQUIRY","MATCH_BASELINE",
+                             "EXPERT_REVIEW","MANAGER_APPROVE","STOCK_UPDATE"}.issubset(actions),actions)
+            self.assertTrue(all(len(e["payload_sha256"])==64 for e in events.json()["events"]))
+            d=connect()
+            try:self.assertIsNotNone(d.execute("SELECT id FROM inquiries WHERE id=?",(iid,)).fetchone())
+            finally:d.close()
+
+            # Reset is restricted to demo-only records, archives atomically, preserves users.
+            wrong=c.post("/v1/admin/catalog/reset-demo",headers=headers,
+                         json={"confirmation":"WRONG"})
+            self.assertEqual(wrong.status_code,422)
+            clean=c.post("/v1/admin/catalog/reset-demo",headers=headers,
+                         json={"confirmation":"RESET DEMO ONLY"})
+            self.assertEqual(clean.status_code,200,clean.text)
+            self.assertEqual(clean.json()["counts"]["products"],5)
+            self.assertEqual(clean.json()["counts"]["inquiries"],1)
+            self.assertEqual(len(c.get("/v1/products",headers=headers).json()),0)
+            self.assertEqual(c.get("/v1/admin/catalog/reset-preview",headers=headers).json()["counts"]["reset_archives"],1)
+
+            # Atomic private catalog import: duplicates are rejected without partial writes.
+            source="a"*64
+            manifest={"version":"v1","source_file_sha256":source,
+                      "source_file_name":"ci-fixture.pdf","catalog_version":"ci-v1",
+                      "source_records":2,"ready_records":2,"quarantined_records":0,
+                      "source_kind":"COMPANY_PRODUCT_CATALOG","claims":[]}
+            item={"number":1,"sku":"CI-ALMOND-01","name":"Almond Flavor",
+                  "product_type":"Liquid","application":"Beverage",
+                  "composition_text":"0.05%-0.1%","source_page":1,"source_number":1}
+            other={**item,"number":2,"sku":"CI-MANGO-02","name":"Mango Flavor","source_number":2}
+            duplicate=c.post("/v1/admin/catalog/import",headers=headers,
+                             json={"manifest":manifest,"products":[item,item]})
+            self.assertEqual(duplicate.status_code,422,duplicate.text)
+            imported=c.post("/v1/admin/catalog/import",headers=headers,
+                            json={"manifest":manifest,"products":[item,other]})
+            self.assertEqual(imported.status_code,201,imported.text)
+            self.assertEqual(imported.json()["imported_count"],2)
+            items=c.get("/v1/catalog/products?q=mango",headers=headers)
+            self.assertEqual(items.json()["total"],1,items.text)
+            self.assertIsNone(items.json()["items"][0]["stock"])
+            blocked=c.post("/v1/admin/catalog/reset-demo",headers=headers,
+                           json={"confirmation":"RESET DEMO ONLY"})
+            self.assertEqual(blocked.status_code,409,blocked.text)
+            # Hybrid benchmark stays isolated from the new catalog.
+            lab=c.get("/v1/ai/hybrid-evaluate?case_id=Q01",headers=headers)
+            self.assertEqual(lab.status_code,200,lab.text)
+            self.assertEqual(lab.json()["catalog_isolation"],
+                             "SYNTHETIC_BENCHMARK_ONLY_NOT_COMPANY_CATALOG")
+            status=c.get("/v1/ai/system-status",headers=headers)
+            self.assertEqual(status.json()["company_catalog_products"],2,status.text)
+            self.assertEqual(status.json()["data_source"],"COMPANY_CATALOG_UNVERIFIED")
+        # Restart idempotence: reset marker prevents seeding five demo SKUs.
+        with TestClient(app) as c:
+            login=c.post("/v1/auth/login",json={
+                "email":os.environ["ADMIN_EMAIL"],"password":os.environ["ADMIN_PASSWORD"]})
+            h={"Authorization":"Bearer "+login.json()["access_token"]}
+            catalog=c.get("/v1/products",headers=h).json()
+            self.assertEqual(len(catalog),2)
+            self.assertTrue(all(x["source_ref"]=="CATALOG-PDF-UNVERIFIED" for x in catalog))
+
+
 
 if __name__=="__main__":unittest.main()

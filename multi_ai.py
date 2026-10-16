@@ -173,6 +173,7 @@ def mount_ai(app,current,get_db):
         counts=db.execute("SELECT COUNT(*) AS n FROM products").fetchone()["n"]
         inquiry_count=db.execute("SELECT COUNT(*) AS n FROM inquiries").fetchone()["n"]
         reviews=db.execute("SELECT COUNT(*) AS n FROM reviews").fetchone()["n"]
+        company_products=db.execute("SELECT COUNT(*) AS n FROM products WHERE source_ref='CATALOG-PDF-UNVERIFIED'").fetchone()["n"]
         backend=engine_name()
         return {
             "environment":"RESEARCH_PILOT",
@@ -184,10 +185,11 @@ def mount_ai(app,current,get_db):
             "model_validated_for_company":False,
             "company_fine_tuning_completed":False,
             "production_ready":False,
-            "data_source":"SYNTHETIC_DEMO",
+            "data_source":"COMPANY_CATALOG_UNVERIFIED" if company_products else "SYNTHETIC_DEMO",
+            "company_catalog_products":company_products,
             "components":[
                 {"id":"AI-01","method":"Bilingual normalization and deterministic requirement extraction","mode":"ONLINE_RULE_BASED","data":"User-entered inquiry","trained_ml_model":False},
-                {"id":"AI-02","method":"BM25 lexical Top-5 with evidence explanations","mode":"ONLINE_BM25_ONLY","data":"Current pilot product catalog","trained_ml_model":False},
+                {"id":"AI-02","method":"BM25 lexical Top-5 with evidence explanations","mode":"ONLINE_BM25_ONLY","data":"Catalog PDF (unverified)" if company_products else "Synthetic pilot products","trained_ml_model":False},
                 {"id":"AI-02-NEURAL","method":fixture.get("model_id") if fixture.get("available") else "Neural fixture unavailable","mode":"OFFLINE_PRECOMPUTED_FIXED_SYNTHETIC_CASES" if fixture.get("available") else "NEURAL_ASSET_UNAVAILABLE",
                  "data":str(len(fixture.get("cases",[])))+" developer-authored example inquiries",
                  "trained_ml_model":bool(fixture.get("available")),
@@ -217,7 +219,16 @@ def mount_ai(app,current,get_db):
             raise HTTPException(403,"Role access denied")
         from research.hybrid_demo import evaluate_case
         try:
-            return evaluate_case(case_id,db.execute("SELECT * FROM products ORDER BY sku").fetchall())
+            # Never apply cached synthetic product embeddings to a distinct company catalog.
+            # Evaluate a separate, fixed synthetic benchmark even after PDF import.
+            from app import DEMO
+            fixture_rows=[{"id":i,"sku":sku,"name":name,"description":desc,
+                           "profile":profile,"application":application,"stock":0,
+                           "source_ref":"FIXED_SYNTHETIC_NEURAL_BENCHMARK"}
+                          for i,(sku,name,desc,profile,application) in enumerate(DEMO,1)]
+            result=evaluate_case(case_id,fixture_rows)
+            result["catalog_isolation"]="SYNTHETIC_BENCHMARK_ONLY_NOT_COMPANY_CATALOG"
+            return result
         except KeyError:
             raise HTTPException(404,"Synthetic benchmark case not found")
         except FileNotFoundError:

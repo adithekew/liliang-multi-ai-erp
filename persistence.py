@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS runs(id INTEGER PRIMARY KEY,inquiry_id INTEGER,method
 CREATE TABLE IF NOT EXISTS candidates(id INTEGER PRIMARY KEY,run_id INTEGER,product_id INTEGER,score REAL,rank INTEGER,unknown TEXT,FOREIGN KEY(run_id) REFERENCES runs(id));
 CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,run_id INTEGER,product_id INTEGER,reviewer_id INTEGER,decision TEXT,label INTEGER,note TEXT);
 CREATE TABLE IF NOT EXISTS audits(id INTEGER PRIMARY KEY,actor_id INTEGER,action TEXT,entity TEXT,entity_id INTEGER,at TEXT);
+CREATE TABLE IF NOT EXISTS transaction_events(id TEXT PRIMARY KEY,actor_id INTEGER,actor_role TEXT,action TEXT,entity TEXT,entity_id TEXT,at TEXT,request_id TEXT,before_json TEXT,after_json TEXT,payload_sha256 TEXT);
+CREATE TABLE IF NOT EXISTS reset_archives(id TEXT PRIMARY KEY,actor_id INTEGER,at TEXT,counts_json TEXT,archive_json TEXT,payload_sha256 TEXT);
+CREATE TABLE IF NOT EXISTS catalog_import_batches(id TEXT PRIMARY KEY,source_sha256 TEXT UNIQUE,source_file TEXT,catalog_version TEXT,items_imported INTEGER,actor_id INTEGER,at TEXT,source_classification TEXT);
+CREATE TABLE IF NOT EXISTS catalog_product_details(sku TEXT PRIMARY KEY,product_type TEXT,application_raw TEXT,composition_raw TEXT,source_page INTEGER,source_number INTEGER,source_sha256 TEXT,batch_id TEXT);
+
 """
 TABLES_WITH_IDS = {"users","products","inquiries","runs","candidates","reviews","audits"}
 def is_postgres():
