@@ -118,6 +118,8 @@ def login(data:Login,db=Depends(get_db)):
     if not valid:
         raise HTTPException(401,"Incorrect email or password")
     token=jwt.encode({"sub":str(u["id"]),"exp":datetime.now(timezone.utc)+timedelta(hours=8)},SECRET_KEY,algorithm="HS256")
+    with db:
+        audit(db,u,"LOGIN_SUCCESS","auth",u["id"],after={"role":u["role"]})
     return {"access_token":token,"user":{"id":u["id"],"role":u["role"],"name":u["name"]}}
 @app.get("/v1/auth/me")
 def me(u=Depends(current)):return u
