@@ -42,10 +42,18 @@ input:focus,textarea:focus,select:focus{border-color:#4189df;box-shadow:0 0 0 3p
 const $=id=>document.getElementById(id);
 const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let token=sessionStorage.getItem("liliang_token")||"",me=null,page="hub",capabilities=[];
+try{
+ const url=new URL(window.location.href);
+ if(url.searchParams.has("utm_source")){
+  url.searchParams.delete("utm_source");
+  history.replaceState({}, "", url.pathname+url.search+url.hash);
+ }
+}catch(_){}
+
 async function api(path,method="GET",body=null){
  let opt={method,headers:{"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})}};
  if(body!==null)opt.body=JSON.stringify(body);
- let res=await fetch(path,opt),json;try{json=await res.json()}catch{throw Error("Server did not return JSON");}
+ let res=await fetch(path,opt),json;try{json=await res.json()}catch{throw Error("Server HTTP "+res.status+" did not return JSON. Check service logs and /readyz.");}
  if(!res.ok)throw Error(typeof json.detail==="string"?json.detail:JSON.stringify(json.detail||json));
  return json;
 }
@@ -60,6 +68,7 @@ const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
  ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
  ["research","▤","AI Research Evidence","AI MODULES"],
+ ["systems","◉","AI System Status","AI MODULES"],
  ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
@@ -81,7 +90,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<button class="navitem '+(page===x[0]?"active":"")+'" data-go="'+x[0]+'"><span>'+x[1]+'</span>'+x[2]+'</button>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.5 · Research evidence pilot<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH / DEMO ONLY:</strong> Seluruh produk dan historis penjualan bersifat sintetis. BM25 bukan neural semantic matching. Belum ada LLM, embedding, validasi pakar, maupun sistem produksi. Koneksi database dapat berupa SQLite sementara atau PostgreSQL persisten; cek /readyz.</div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.6 · AI status transparency<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — DATA SINTETIS:</strong> Katalog flavor dan histori penjualan demo bukan data riil PT. Liliang. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate('systems')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navigate(b.dataset.go));
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -91,7 +100,7 @@ async function enter(){
 }
 async function navigate(p){if(!allowed(p))return;page=p;frame();await show()}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -114,7 +123,7 @@ async function demoMatch(){
 }
 async function runMatch(){
  try{let d=await api("/v1/ai/match-preview","POST",{text:$("query").value});
- $("labresult").innerHTML='<div class="card" style="margin-top:18px"><div class="toolbar"><h3>Candidate Top-5</h3><span class="tag unknown">Not expert validated</span></div><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor Product</th><th>BM25 Score</th><th>Evidence</th><th>Constraint</th></tr>'+d.candidates.map(x=>'<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td><b>'+escapeHtml(x.name)+'</b></td><td>'+x.score+'</td><td><span class="tag unknown">Not verified</span></td><td>Regulatory / Halal UNKNOWN</td></tr>').join("")+'</table></div><p class="note">Preview hanya simulasi. Untuk menyimpan ranking, buat Inquiry dan kirim ke Technical Review.</p></div>';
+ $("labresult").innerHTML='<div class="card" style="margin-top:18px"><div class="toolbar"><h3>Candidate Top-5</h3><span class="tag unknown">Not expert validated</span></div><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor Product</th><th>BM25 Score</th><th>Evidence</th><th>Constraint</th></tr>'+d.candidates.map(x=>'<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td><b>'+escapeHtml(x.name)+'</b></td><td>'+x.score+'</td><td><div class="small">'+escapeHtml(x.explanation?.matched_terms?.join(", ")||"no lexical match")+'</div><span class="tag unknown">Not verified</span></td><td>Regulatory / Halal UNKNOWN</td></tr>').join("")+'</table></div><p class="note">Istilah yang ditampilkan merupakan jejak kecocokan leksikal, bukan bukti kelayakan teknis. Skor BM25 bukan probabilitas. Untuk menyimpan ranking, buat Inquiry dan kirim ke Technical Review.</p></div>';
  }catch(e){fail(e)}
 }
 async function overview(){
@@ -203,6 +212,19 @@ async function runHybridDemo(){
   '<div class="grid">'+rankings("BM25 Ranking",d.lexical_skus)+rankings("Neural Dense Ranking",d.dense_skus)+rankings("Hybrid RRF Ranking",d.hybrid_skus)+'</div>'+
   '<div class="card"><h2>RRF Candidate Ranking & Uncertainty</h2><div class="tablewrap"><table><thead><tr><th>Rank</th><th>SKU</th><th>BM25</th><th>Dense</th><th>Cosine</th><th>RRF Score</th><th>Evidence</th></tr></thead><tbody>'+d.ranked_candidates.map(x=>'<tr><td>#'+x.rank+'</td><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+x.bm25_rank+'</td><td>'+x.dense_rank+'</td><td>'+x.dense_cosine+'</td><td>'+x.rrf_score+'</td><td><span class="tag unknown">'+escapeHtml(x.constraint_status)+'</span></td></tr>').join("")+'</tbody></table></div><p class="note">'+escapeHtml(d.notes)+'</p><p class="note">Developer-authored illustrative label: '+escapeHtml(d.developer_authored_expected_sku)+' (not expert ground truth).</p></div></div>';
  }catch(e){area.innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>';fail(e)}
+}
+async function aiSystemStatus(){
+ const [status,ready]=await Promise.all([api("/v1/ai/system-status"),api("/readyz")]);
+ const record=(label,val)=>'<div class="card"><div class="kpi-lbl">'+escapeHtml(label)+'</div><div class="kpi" style="font-size:17px">'+escapeHtml(val)+'</div></div>';
+ const services=status.components.map(x=>'<tr><td><b>'+escapeHtml(x.id)+'</b></td><td>'+escapeHtml(x.method)+'</td><td><span class="tag '+(x.mode.includes("ONLINE")?"":"unknown")+'">'+escapeHtml(x.mode)+'</span></td><td>'+escapeHtml(x.data)+'</td></tr>').join("");
+ $("view").innerHTML=headline("SYSTEM OBSERVABILITY / LIVE DATA","AI & Cloud System Status",
+ "Status aktual dihitung oleh backend. Ini inventory kemampuan, BUKAN pengukuran akurasi.")+
+ '<div class="grid">'+record("Database",status.database_backend.toUpperCase())+record("Persistent Storage",status.persistent_database?"YES":"NO — EPHEMERAL")+
+ record("Neural Fixed-Query Lab",status.components.find(x=>x.id==="AI-02-NEURAL")?.trained_ml_model?"PRECOMPUTED ACTIVE":"UNAVAILABLE")+
+ record("Expert Reviews",status.expert_review_count)+'</div>'+
+ '<div class="card"><div class="toolbar"><h2>Component Execution Modes</h2><span class="tag unknown">NO VALIDATED COMPANY MODEL</span></div><div class="tablewrap"><table><thead><tr><th>Module</th><th>Implemented Method</th><th>Runtime Mode</th><th>Data Scope</th></tr></thead><tbody>'+services+'</tbody></table></div>'+
+ '<p class="note">Database health: '+escapeHtml(ready.ready?"READY":"NOT READY")+' · product records: '+status.product_count+' · inquiry records: '+status.inquiry_count+'. No passwords, connection strings or customer requirements are exposed.</p></div>'+
+ '<div class="grid two"><div class="card"><h2>AI-02 Research Workflow</h2><p class="sub">Pretrained neural vectors: GitHub Actions offline → versioned synthetic fixtures → cosine dense ranking → RRF hybrid fusion. FastAPI receives new arbitrary inquiries but currently ranks them with BM25 only.</p><button class="btn" onclick="navigate(\'hybrid\')">Test Precomputed Neural Demo</button></div><div class="card"><h2>Still Pending Before Research/Production</h2>'+status.limitations.map(s=>'<p class="small">• '+escapeHtml(s)+'</p>').join("")+'<button class="btn secondary" onclick="navigate(\'research\')">Review Scientific Readiness</button></div></div>';
 }
 async function researchEvidence(){
  const [m,r,e,q]=await Promise.all([
