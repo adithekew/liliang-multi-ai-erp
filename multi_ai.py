@@ -1,7 +1,8 @@
 """Research pilot AI demonstrations. All commercial data below is SYNTHETIC.
 
-No LLM, neural embedding model, validated datasheet evidence, or real
-company sales history is connected in this version.
+No runtime LLM, online free-text neural encoder, validated datasheet evidence,
+or real company sales history is connected. Real pretrained multilingual
+neural embeddings exist for the ten fixed synthetic research queries.
 """
 from collections import Counter
 from datetime import date, timedelta
@@ -76,7 +77,13 @@ def score_products(query, products):
             "score":round(raw,4),"source_ref":p.get("source_ref","DEMO-ONLY"),
             "unknown_attributes":["regulatory","halal_status"],
             "evidence_verified":False,"profile":p.get("profile"),
-            "application":p.get("application")
+            "application":p.get("application"),
+            "explanation":{
+                "matched_terms":sorted(set(q)&set(doc))[:12],
+                "flavor_tag_match":bool(parsed["flavor"] and parsed["flavor"]==p.get("profile")),
+                "application_tag_match":bool(parsed["application"] and parsed["application"]==p.get("application")),
+                "limitations":"Lexical/domain-tag evidence only; no verified datasheet or suitability assessment."
+            }
         })
     candidates.sort(key=lambda x:(-x["score"],x["sku"]))
     for rank,c in enumerate(candidates[:5],1):c["rank"]=rank
@@ -137,7 +144,7 @@ def forecast_baseline(sku,horizon=4):
 
 CAPABILITIES=[
   {"id":"AI-01","title":"Requirement Interpreter","method":"Rule-based bilingual NLP","status":"BASELINE_DEMO","dataset":"Demo text","research_role":"Primary pipeline input"},
-  {"id":"AI-02","title":"Product Matching","method":"BM25 lexical ranking + expert validation","status":"BASELINE_DEMO","dataset":"5 synthetic flavor SKUs","research_role":"Primary research target; embeddings, hybrid RRF and provenance pending"},
+  {"id":"AI-02","title":"Product Matching","method":"BM25 lexical ranking + expert validation","status":"BASELINE_DEMO","dataset":"5 synthetic flavor SKUs","research_role":"Primary research target; fixed-query neural demonstration available; online neural inference and expert evaluation pending"},
   {"id":"AI-03","title":"Product Bundling","method":"Association rules: support, confidence, lift","status":"SYNTHETIC_DEMO","dataset":"16 synthetic order baskets","research_role":"Secondary evaluation"},
   {"id":"AI-04","title":"Demand Forecasting","method":"Rolling-origin 4-week moving average","status":"SYNTHETIC_DEMO","dataset":"24 synthetic SKU-weeks per flavor","research_role":"Secondary evaluation"}
 ]
@@ -156,6 +163,46 @@ def mount_ai(app,current,get_db):
         return {"modules":modules,"all_models_validated":False,
                 "data_scope":"SYNTHETIC_PILOT",
                 "scientific_note":"Results are demonstrations, not measured findings for PT Liliang."}
+
+    @app.get("/v1/ai/system-status")
+    def system_status(u=Depends(current),db=Depends(get_db)):
+        """Live truthful capability inventory: neither accuracy nor production certification."""
+        from persistence import engine_name
+        from research.hybrid_demo import public_cases
+        fixture=public_cases()
+        counts=db.execute("SELECT COUNT(*) AS n FROM products").fetchone()["n"]
+        inquiry_count=db.execute("SELECT COUNT(*) AS n FROM inquiries").fetchone()["n"]
+        reviews=db.execute("SELECT COUNT(*) AS n FROM reviews").fetchone()["n"]
+        backend=engine_name()
+        return {
+            "environment":"RESEARCH_PILOT",
+            "database_backend":backend,
+            "persistent_database":backend=="postgresql",
+            "product_count":counts,
+            "inquiry_count":inquiry_count,
+            "expert_review_count":reviews,
+            "model_validated_for_company":False,
+            "company_fine_tuning_completed":False,
+            "production_ready":False,
+            "data_source":"SYNTHETIC_DEMO",
+            "components":[
+                {"id":"AI-01","method":"Bilingual normalization and deterministic requirement extraction","mode":"ONLINE_RULE_BASED","data":"User-entered inquiry","trained_ml_model":False},
+                {"id":"AI-02","method":"BM25 lexical Top-5 with evidence explanations","mode":"ONLINE_BM25_ONLY","data":"Current pilot product catalog","trained_ml_model":False},
+                {"id":"AI-02-NEURAL","method":fixture.get("model_id") if fixture.get("available") else "Neural fixture unavailable","mode":"OFFLINE_PRECOMPUTED_FIXED_SYNTHETIC_CASES" if fixture.get("available") else "NEURAL_ASSET_UNAVAILABLE",
+                 "data":str(len(fixture.get("cases",[])))+" developer-authored example inquiries",
+                 "trained_ml_model":bool(fixture.get("available")),
+                 "embedding_dimensions":fixture.get("dimensions") if fixture.get("available") else None},
+                {"id":"AI-03","method":"Association rules (support, confidence, lift)","mode":"ONLINE_STATISTICAL_SYNTHETIC_DEMO","data":"16 synthetic order baskets","trained_ml_model":False},
+                {"id":"AI-04","method":"4-week moving average and rolling backtest","mode":"ONLINE_FORECAST_BASELINE_SYNTHETIC_DEMO","data":"24 synthetic SKU-week points per item","trained_ml_model":False}
+            ],
+            "limitations":[
+                "No online neural encoder for arbitrary free-text inquiries.",
+                "Pretrained neural vectors exist only for the versioned fixed synthetic benchmark.",
+                "No company-trained or expert-validated models; relevance scores are not accuracy percentages.",
+                "No verified halal, regulatory, datasheet, or real sales history source.",
+                "No LLM or autonomous business decisions."
+            ]
+        }
 
     @app.get("/v1/ai/hybrid-cases")
     def hybrid_cases(u=Depends(current)):
