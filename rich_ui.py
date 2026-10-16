@@ -74,10 +74,13 @@ const menu=[
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
  ["bundling","♧","Sales Intelligence","AI MODULES"],
  ["forecast","▥","Forecast & Inventory","AI MODULES"],
- ["users","⚙","User Management","ADMIN"]
+ ["users","⚙","User Management","ADMIN"],
+ ["roles","♙","UAT Role Accounts","ADMIN"],
+ ["migration","⇄","Catalog Migration","ADMIN"],
+ ["audit","≡","Audit Transactions","ADMIN"]
 ];
 function allowed(key){
- if(key==="users")return me.role==="admin";
+ if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research")return ["admin","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
@@ -90,7 +93,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<button class="navitem '+(page===x[0]?"active":"")+'" data-go="'+x[0]+'"><span>'+x[1]+'</span>'+x[2]+'</button>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.6 · AI status transparency<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — DATA SINTETIS:</strong> Katalog flavor dan histori penjualan demo bukan data riil PT. Liliang. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.7 · audited ERP catalog<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navigate(b.dataset.go));
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -100,7 +103,7 @@ async function enter(){
 }
 async function navigate(p){if(!allowed(p))return;page=p;frame();await show()}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users()else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -129,13 +132,24 @@ async function runMatch(){
 async function overview(){
  let [s,c]=await Promise.all([api("/v1/analytics/summary"),api("/v1/ai/capabilities")]);
  $("view").innerHTML=headline("ERP / MANAGEMENT","Dashboard Operasional","Ringkasan workflow ERP dan kesiapan modul analitik.")+
- '<div class="grid"><div class="card"><div class="kpi-lbl">Master Flavor (Dummy)</div><div class="kpi">'+s.product_count+'</div><span class="tag">Synthetic</span></div><div class="card"><div class="kpi-lbl">Customer Inquiries</div><div class="kpi">'+s.inquiry_count+'</div><span class="small">Pilot records</span></div><div class="card"><div class="kpi-lbl">Available AI Demos</div><div class="kpi">'+c.modules.length+'</div><span class="tag unknown">Baseline only</span></div><div class="card"><div class="kpi-lbl">Validated AI Models</div><div class="kpi">0</div><span class="small">Research pending</span></div></div>'+
+ '<div class="grid"><div class="card"><div class="kpi-lbl">Master Flavor (Catalog)</div><div class="kpi">'+s.product_count+'</div><span class="tag">Synthetic</span></div><div class="card"><div class="kpi-lbl">Customer Inquiries</div><div class="kpi">'+s.inquiry_count+'</div><span class="small">Pilot records</span></div><div class="card"><div class="kpi-lbl">Available AI Demos</div><div class="kpi">'+c.modules.length+'</div><span class="tag unknown">Baseline only</span></div><div class="card"><div class="kpi-lbl">Validated AI Models</div><div class="kpi">0</div><span class="small">Research pending</span></div></div>'+
  '<div class="grid two"><div class="card"><h2>Workflow Proyek</h2><p class="sub">Sales Inquiry → BM25 shortlist → Technical review → Manager approval. Setiap keputusan penting memerlukan persetujuan manusia.</p><button class="btn" onclick="navigate(\'inquiries\')">Buka Workflow</button></div><div class="card"><h2>Integrasi Empat Modul</h2><p class="sub">AI-01 requirements, AI-02 product matching, AI-03 bundling, AI-04 demand forecasting. Pilih modul dari Multi-AI Workspace.</p><button class="btn secondary" onclick="navigate(\'hub\')">Buka Multi-AI →</button></div></div>';
 }
+let catalogPage=1,catalogQuery="";
 async function catalog(){
- const p=await api("/v1/products");
- $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog","Master SKU contoh untuk validasi fitur. Tidak ada datasheet PT. Liliang yang terhubung.")+
- '<div class="card"><div class="toolbar"><h2>Master Flavor</h2><span class="tag unknown">DEMO-ONLY</span></div><div class="tablewrap"><table><tr><th>SKU</th><th>Product Name</th><th>Flavor</th><th>Application</th><th>Stock</th><th>Source</th></tr>'+p.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.profile)+'</td><td>'+escapeHtml(x.application)+'</td><td>'+escapeHtml(x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref)+'</span></td></tr>').join("")+'</table></div></div>';
+ let data=await api("/v1/catalog/products?q="+encodeURIComponent(catalogQuery)+"&page="+catalogPage+"&size=50");
+ $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
+ "Katalog bersumber dari data demo atau PDF pemasok yang diimpor Admin. Informasi kegunaan bukan sertifikasi produk; stok NULL ditampilkan UNKNOWN.")+
+ '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><span class="tag unknown">SOURCE-AWARE CATALOG</span></div>'+
+ '<div class="actions"><input id="catalogsearch" style="max-width:320px" value="'+escapeHtml(catalogQuery)+'" placeholder="Cari SKU, nama, pemakaian"><button class="btn" id="catalogfind">Cari</button><button class="btn secondary" id="catalogclear">Reset Filter</button></div>'+
+ '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th></tr>'+
+ data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td></tr>').join("")+
+ '</table></div><div class="actions" style="margin-top:18px"><button class="btn secondary" id="prevcatalog" '+(catalogPage===1?"disabled":"")+'>← Sebelumnya</button><span class="small">Halaman '+catalogPage+' dari '+Math.max(1,Math.ceil(data.total/50))+'</span><button class="btn secondary" id="nextcatalog" '+(catalogPage*50>=data.total?"disabled":"")+'>Selanjutnya →</button></div></div>';
+ $("catalogfind").onclick=()=>{catalogQuery=$("catalogsearch").value;catalogPage=1;catalog()};
+ $("catalogsearch").onkeydown=e=>{if(e.key==="Enter"){catalogQuery=e.target.value;catalogPage=1;catalog()}};
+ $("catalogclear").onclick=()=>{catalogQuery="";catalogPage=1;catalog()};
+ $("prevcatalog").onclick=()=>{catalogPage=Math.max(1,catalogPage-1);catalog()};
+ $("nextcatalog").onclick=()=>{catalogPage++;catalog()};
 }
 async function inquiries(){
  let rows=await api("/v1/inquiries"),canNew=["admin","sales"].includes(me.role);
@@ -255,6 +269,62 @@ async function researchEvidence(){
  '<section class="card"><div class="toolbar"><h2>5. Model Performance Evidence</h2><span class="tag unknown">'+escapeHtml(e.status)+'</span></div><div class="tablewrap"><table><thead><tr><th>Method</th><th>Fully judged</th><th>Mean nDCG@5</th><th>MRR@5</th><th>Claim</th></tr></thead><tbody>'+scores+'</tbody></table></div><p class="note">nDCG@5 & MRR@5 are calculated only when the complete candidate set has valid 0–3 expert labels. Results remain exploratory until independent held-out testing.</p>'+
  '<p class="note">'+escapeHtml(e.warnings.join(' '))+'</p></section>'+
  '<div class="card"><h2>6. Jawaban untuk Dosen Pembimbing</h2><p class="sub"><b>Akurasi:</b> belum diklaim; diuji dengan nDCG@5/MRR pada gold standard Technical.<br><b>Training:</b> model MiniLM pretrained eksternal; PT. Liliang fine-tuning belum dilakukan.<br><b>Cleansing:</b> normalisasi, karantina PII, dedup, validasi atribut dan split anti-leakage.<br><b>Keunggulan ML:</b> pretrained embeddings menangkap kemiripan semantik lintas bahasa; BM25 efisien untuk istilah exact; RRF memadukan ranking tanpa menyamakan skala skornya.</p><p class="note">Kesimpulan efektivitas memerlukan eksperimen E1–E5 pada dataset yang mendapat izin dan label pakar.</p></div>';
+}
+async function uatRoles(){
+ const source=await api("/v1/users");
+ const rows=source.filter(x=>/^(sales|technical|manager|gudang)$/.test(x.role));
+ $("view").innerHTML=headline("ADMIN / FIVE ROLES","UAT Role Accounts",
+ "Membuat empat akun UAT di PostgreSQL. Password unik dihasilkan server dan ditampilkan satu kali; jangan tampilkan halaman hasil ketika screen-sharing.")+
+ '<div class="grid two"><div class="card"><h2>One-Time Account Provisioning</h2><p class="sub">Admin sudah aktif. Siapkan Sales, Technical, Manager Operasional, dan Gudang; identitas uat-...@liliang.local adalah akun percobaan, bukan alamat email perusahaan sebenarnya.</p><button class="btn" id="bootstraproles">Generate Empat Akun UAT</button><p class="note">Tidak akan menimpa password akun yang sudah ada. Simpan kredensial secara pribadi; server hanya menyimpan hash Argon2.</p></div><div class="card"><h2>Current Operational Roles</h2><div class="tablewrap"><table><tr><th>Email</th><th>Role</th></tr>'+rows.map(x=>'<tr><td>'+escapeHtml(x.email)+'</td><td>'+escapeHtml(x.role)+'</td></tr>').join("")+'</table></div></div></div><section class="card" id="uatsecrets" style="display:none"></section>';
+ $("bootstraproles").onclick=async()=>{
+  if(!confirm("Buat akun UAT empat role dengan password unik sekali tampil? Lanjutkan tanpa screen sharing."))return;
+  try{
+   const r=await api("/v1/admin/uat/bootstrap","POST",{confirmation:"CREATE UAT ROLES"});
+   const area=$("uatsecrets");area.style.display="block";
+   area.innerHTML='<h2>ONE-TIME ACCESS CREDENTIALS</h2><p class="error">SIMPAN SEKARANG SECARA AMAN. Password tidak bisa ditampilkan ulang.</p><div class="tablewrap"><table><tr><th>Role</th><th>Email</th><th>Password (sekali tampil)</th><th>Status</th></tr>'+
+    r.roles.map(x=>'<tr><td>'+escapeHtml(x.role)+'</td><td>'+escapeHtml(x.email)+'</td><td><code>'+escapeHtml(x.password_once||"Existing — not disclosed")+'</code></td><td>'+escapeHtml(x.status)+'</td></tr>').join("")+'</table></div>';
+   toast("UAT accounts provisioned. Simpan kredensial secara aman.");
+  }catch(e){fail(e)}
+ };
+}
+async function migration(){
+ const [preview,imports]=await Promise.all([api("/v1/admin/catalog/reset-preview"),api("/v1/admin/catalog/imports")]);
+ const counts=preview.counts;
+ $("view").innerHTML=headline("ADMIN / MASTER DATA GOVERNANCE","Catalog Migration",
+ "Reset demo HARUS dilakukan secara sadar dan diarsipkan. Dataset PDF katalog masuk melalui browser Admin dan tidak dikomit ke GitHub.")+
+ '<div class="grid two"><div class="card"><h2>1. Archive & Reset Demo Transactions</h2><p class="sub">Produk: '+counts.products+' | Inquiry: '+counts.inquiries+' | Matching: '+counts.runs+' | Reviews: '+counts.reviews+'. Semua akun dan audit events tetap tersimpan.</p><p class="note">'+escapeHtml(preview.safety)+'</p>'+
+ '<label>Ketik konfirmasi RESET DEMO ONLY</label><input id="resetconfirm" placeholder="RESET DEMO ONLY"><button class="btn danger" id="resetdemo" '+(!preview.demo_reset_allowed?"disabled":"")+'>Archive & Reset Demo</button><div id="resetresult"></div></div>'+
+ '<div class="card"><h2>2. Import 1.452 Produk Hasil Cleansing</h2><p class="sub">Gunakan berkas <b>catalog_import_ready.json</b> (dari ChatGPT). 3 baris duplikat/konflik dikarantina. Stok tetap UNKNOWN sampai Gudang mengisi data sebenarnya. Import atomik dan hanya pada katalog aktif kosong.</p>'+
+ '<label>Pilih JSON Import-ready</label><input type="file" id="importfile" accept=".json,application/json"><button class="btn" id="importcatalog" '+(counts.products?"disabled":"")+'>Impor Katalog Private ke Neon</button><div id="importresult"></div></div></div>'+
+ '<div class="card"><h2>Catalog Import History</h2><p class="sub">'+imports.imports.length+' batch tercatat. PDF bukan data stok atau penjualan riil.</p><div class="tablewrap"><table><tr><th>Imported</th><th>Count</th><th>Source</th><th>Validation</th></tr>'+imports.imports.map(x=>'<tr><td>'+escapeHtml(x.at)+'</td><td>'+x.items_imported+'</td><td>'+escapeHtml(x.source_file)+'</td><td>'+escapeHtml(x.source_classification)+'</td></tr>').join("")+'</table></div></div>';
+ $("resetdemo").onclick=async()=>{
+  if($("resetconfirm").value!=="RESET DEMO ONLY"){toast("Konfirmasi tidak cocok",true);return}
+  if(!confirm("LAST CONFIRMATION: Arsipkan lalu bersihkan produk dan seluruh inquiry/matching demo saat ini? Akun dan audit log TIDAK dihapus."))return;
+  try{const r=await api("/v1/admin/catalog/reset-demo","POST",{confirmation:"RESET DEMO ONLY"});
+      toast("Archived demo reset completed");await migration()}
+  catch(e){fail(e)}
+ };
+ $("importcatalog").onclick=async()=>{
+  const file=$("importfile").files[0];
+  if(!file){toast("Pilih JSON hasil cleansing dulu",true);return}
+  try{
+   const payload=JSON.parse(await file.text());
+   if(!payload.manifest||!Array.isArray(payload.products))throw Error("Invalid import manifest or products");
+   if(!confirm("Impor "+payload.products.length+" SKU dari "+payload.manifest.source_file_name+" ke Neon? Data tetap memerlukan verifikasi Technical."))return;
+   $("importcatalog").disabled=true;$("importresult").textContent="Import berjalan, jangan tutup tab...";
+   const r=await api("/v1/admin/catalog/import","POST",payload);
+   toast("Imported "+r.imported_count+" catalog records");await migration();
+  }catch(e){fail(e);$("importresult").textContent=e.message;$("importcatalog").disabled=false}
+ };
+}
+async function auditTrail(){
+ const [x,old]=await Promise.all([api("/v1/admin/audit-events?limit=200"),api("/v1/admin/catalog/imports")]);
+ $("view").innerHTML=headline("ADMIN / FORENSIC AUDIT","Transaction Audit Trace",
+ "Jejak permanen tindakan penting. Actor, role, operasi, entity, timestamp dan SHA-256 direkam dalam transaksi database yang sama.")+
+ '<div class="card"><div class="toolbar"><h2>Latest '+x.events.length+' Transaction Events</h2><span class="tag">APPEND ONLY</span></div>'+
+ '<div class="tablewrap"><table><tr><th>UTC Time</th><th>Actor ID / Role</th><th>Action</th><th>Entity</th><th>Trace ID</th></tr>'+
+ x.events.map(y=>'<tr><td>'+escapeHtml(y.at)+'</td><td>#'+escapeHtml(y.actor_id)+' / '+escapeHtml(y.actor_role)+'</td><td><b>'+escapeHtml(y.action)+'</b></td><td>'+escapeHtml(y.entity)+' #'+escapeHtml(y.entity_id)+'</td><td><code>'+escapeHtml(y.id.slice(0,13))+'...</code></td></tr>').join("")+'</table></div>'+
+ '<p class="note">Password, inquiry free-text dan isi katalog sengaja tidak disalin ke audit event. Sebagian transaksi lama masih tersimpan dalam tabel audit legacy.</p></div>';
 }
 async function users(){
  let users=await api("/v1/users");
