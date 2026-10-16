@@ -101,7 +101,7 @@ class PilotFlow(unittest.TestCase):
             self.assertIn("Lexical",explanation["limitations"])
             status=client.get("/v1/ai/system-status",headers=admin)
             self.assertEqual(status.status_code,200,status.text)
-            self.assertEqual(status.json()["database_backend"],"sqlite")
+            self.assertEqual(status.json()["database_backend"],"sqlite-ephemeral")
             self.assertFalse(status.json()["persistent_database"])
             self.assertFalse(status.json()["model_validated_for_company"])
             self.assertFalse(status.json()["company_fine_tuning_completed"])
