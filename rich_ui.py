@@ -186,9 +186,14 @@ async function bundling(){
  '<div class="grid two"><div class="card"><h2>Bagaimana AI-03 bekerja?</h2><p class="sub">Order baskets → frequency counts → association rules → business filters → validasi Sales. Untuk data aktual, batal/retur, promosi dan split temporal harus diproses.</p></div><div class="card"><h2>Research Scope</h2><p class="sub">AI-03 merupakan eksperimen sekunder. Angka lift pada demo tidak dapat diklaim sebagai pola pembelian PT. Liliang.</p></div></div>';
 }
 async function forecast(){
- let p=await api("/v1/products");
- const allowed=p.filter(x=>["FLV-STRAW-01","FLV-VANI-02","FLV-MANG-03","FLV-CHOCO-04","FLV-LEMON-05"].includes(x.sku));
- $("view").innerHTML=headline("AI-04 / DEMAND FORECASTING","Sales Demand Intelligence","Prediksi SKU-week berdasarkan 24 minggu penjualan sintetis dengan baseline 4-week moving average.")+
+ const allowed=[
+  {sku:"FLV-STRAW-01",name:"Strawberry (Synthetic)"},
+  {sku:"FLV-VANI-02",name:"Vanilla (Synthetic)"},
+  {sku:"FLV-MANG-03",name:"Mango (Synthetic)"},
+  {sku:"FLV-CHOCO-04",name:"Chocolate (Synthetic)"},
+  {sku:"FLV-LEMON-05",name:"Lemon (Synthetic)"}
+ ];
+ $("view").innerHTML=headline("AI-04 / DEMAND FORECASTING","Sales Demand Intelligence","Forecast ini menggunakan SKU dan transaksi SINTETIS tersendiri, bukan katalog PDF maupun riwayat penjualan PT. Li Liang. Baseline 4-week moving average.")+
  '<div class="card"><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
  await runForecast();
 }
@@ -233,7 +238,7 @@ async function aiSystemStatus(){
  const services=status.components.map(x=>'<tr><td><b>'+escapeHtml(x.id)+'</b></td><td>'+escapeHtml(x.method)+'</td><td><span class="tag '+(x.mode.includes("ONLINE")?"":"unknown")+'">'+escapeHtml(x.mode)+'</span></td><td>'+escapeHtml(x.data)+'</td></tr>').join("");
  $("view").innerHTML=headline("SYSTEM OBSERVABILITY / LIVE DATA","AI & Cloud System Status",
  "Status aktual dihitung oleh backend. Ini inventory kemampuan, BUKAN pengukuran akurasi.")+
- '<div class="grid">'+record("Database",status.database_backend.toUpperCase())+record("Persistent Storage",status.persistent_database?"YES":"NO — EPHEMERAL")+
+ '<div class="grid">'+record("Catalog Source",status.data_source)+record("Database",status.database_backend.toUpperCase())+record("Persistent Storage",status.persistent_database?"YES":"NO — EPHEMERAL")+
  record("Neural Fixed-Query Lab",status.components.find(x=>x.id==="AI-02-NEURAL")?.trained_ml_model?"PRECOMPUTED ACTIVE":"UNAVAILABLE")+
  record("Expert Reviews",status.expert_review_count)+'</div>'+
  '<div class="card"><div class="toolbar"><h2>Component Execution Modes</h2><span class="tag unknown">NO VALIDATED COMPANY MODEL</span></div><div class="tablewrap"><table><thead><tr><th>Module</th><th>Implemented Method</th><th>Runtime Mode</th><th>Data Scope</th></tr></thead><tbody>'+services+'</tbody></table></div>'+
