@@ -121,8 +121,7 @@ def mount_enterprise(app,current,get_db,audit,ph):
               VALUES(?,?,?,?,?,?)""",(archive_id,u["id"],stamp(),json_text(counts),raw,checksum))
             for table in ("reviews","candidates","runs","inquiries","products"):
                 db.execute("DELETE FROM "+table)
-            append_event(db,u,"DEMO_RESET_ARCHIVED","reset",archive_id,after={"counts":counts,"sha256":checksum})
-            audit(db,u,"DEMO_RESET_ARCHIVED","reset",0)
+            audit(db,u,"DEMO_RESET_ARCHIVED","reset",0,after={"archive_id":archive_id,"counts":counts,"sha256":checksum})
         return {"archive_id":archive_id,"counts":counts,"sha256":checksum,"users_preserved":True,"audit_logs_preserved":True}
 
     @app.post("/v1/admin/uat/bootstrap")
@@ -200,10 +199,9 @@ def mount_enterprise(app,current,get_db,audit,ph):
                        (id,source_sha256,source_file,catalog_version,items_imported,actor_id,at,source_classification)
                        VALUES(?,?,?,?,?,?,?,?)""",
                        (batch,m.source_file_sha256,m.source_file_name,m.catalog_version,len(details),u["id"],stamp(),"PENDING_TECHNICAL_VERIFICATION"))
-            append_event(db,u,"CATALOG_IMPORTED","catalog",batch,
-                         after={"products":len(details),"source_sha256":m.source_file_sha256,
-                                "source_rows_quarantined":m.quarantined_records,"source_classification":"PENDING_TECHNICAL_VERIFICATION"})
-            audit(db,u,"CATALOG_IMPORTED","catalog",0)
+            audit(db,u,"CATALOG_IMPORTED","catalog",0,
+                  after={"batch_id":batch,"products":len(details),"source_sha256":m.source_file_sha256,
+                         "source_rows_quarantined":m.quarantined_records,"source_classification":"PENDING_TECHNICAL_VERIFICATION"})
         return {"import_batch_id":batch,"imported_count":len(details),"quarantined_source_rows":m.quarantined_records,
                 "stock":"UNKNOWN","halal_and_regulatory":"UNKNOWN",
                 "technical_validation":"PENDING","source_sha256":m.source_file_sha256}
