@@ -113,7 +113,7 @@ class PostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(inventory.status_code,200,inventory.text)
             # Server creates downloadable PDF and CSV reports for real persisted PostgreSQL transactions.
             for k in ("inquiries","matching","technical_reviews","manager_decisions",
-                      "stock_movements","catalog","audit","ai_bundling","ai_forecast","ai_research"):
+                      "stock_movements","catalog","audit","ai_requirement","ai_hybrid","ai_bundling","ai_forecast","ai_research"):
                 pdf=c.get("/v1/reports/"+k+"?format=pdf",headers=headers)
                 self.assertEqual(pdf.status_code,200,k+": "+str(pdf.status_code))
                 self.assertTrue(pdf.content.startswith(b"%PDF"),k)
