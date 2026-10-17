@@ -28,6 +28,11 @@ class PilotFlow(unittest.TestCase):
             summary=summary_response.json()
             self.assertEqual(summary["product_count"],5)
             self.assertEqual(summary["inquiry_count"],0)
+            self.assertEqual(summary["catalog_source"],"SYNTHETIC_DEMO")
+            self.assertEqual(summary["supplier_catalog_products"],0)
+            self.assertEqual(summary["stock_unknown_count"],0)
+            self.assertEqual(summary["user_count"],1)
+            self.assertEqual(summary["expert_review_count"],0)
             self.assertEqual(summary["bundling"],"SYNTHETIC_DEMO")
             self.assertEqual(summary["forecast"],"SYNTHETIC_DEMO")
             from concurrent.futures import ThreadPoolExecutor

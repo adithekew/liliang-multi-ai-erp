@@ -139,6 +139,18 @@ class PostgresIntegrationTest(unittest.TestCase):
             status=c.get("/v1/ai/system-status",headers=headers)
             self.assertEqual(status.json()["company_catalog_products"],2,status.text)
             self.assertEqual(status.json()["data_source"],"COMPANY_CATALOG_UNVERIFIED")
+            summary_after=c.get("/v1/analytics/summary",headers=headers)
+            self.assertEqual(summary_after.status_code,200,summary_after.text)
+            self.assertEqual(summary_after.json()["product_count"],2)
+            self.assertEqual(summary_after.json()["supplier_catalog_products"],2)
+            self.assertEqual(summary_after.json()["stock_unknown_count"],2)
+            self.assertEqual(summary_after.json()["catalog_source"],"SUPPLIER_PDF_PENDING_TECHNICAL")
+            self.assertEqual(summary_after.json()["user_count"],5)
+            self.assertGreaterEqual(summary_after.json()["audit_event_count"],8)
+            caps_after=c.get("/v1/ai/capabilities",headers=headers)
+            self.assertEqual(caps_after.status_code,200,caps_after.text)
+            self.assertIn("COMPANY_CATALOG_UNVERIFIED",caps_after.json()["data_scope"])
+            self.assertIn("supplier-catalog",caps_after.json()["modules"][1]["dataset"])
         # Restart idempotence: reset marker prevents seeding five demo SKUs.
         with TestClient(app) as c:
             login=c.post("/v1/auth/login",json={

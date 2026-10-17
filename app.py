@@ -215,10 +215,18 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
     return {"status":status}
 @app.get("/v1/analytics/summary")
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
+    company_count=db.execute("SELECT COUNT(*) AS n FROM products WHERE source_ref='CATALOG-PDF-UNVERIFIED'").fetchone()["n"]
     return {"product_count":db.execute("SELECT COUNT(*) AS total FROM products").fetchone()["total"],
             "inquiry_count":db.execute("SELECT COUNT(*) AS total FROM inquiries").fetchone()["total"],
             "ai_matching":"LEXICAL_BASELINE_ONLY","bundling":"SYNTHETIC_DEMO",
-            "forecast":"SYNTHETIC_DEMO","data_classification":"SYNTHETIC_DEMO"}
+            "forecast":"SYNTHETIC_DEMO",
+            "data_classification":"COMPANY_CATALOG_UNVERIFIED" if company_count else "SYNTHETIC_DEMO",
+            "catalog_source":"SUPPLIER_PDF_PENDING_TECHNICAL" if company_count else "SYNTHETIC_DEMO",
+            "supplier_catalog_products":company_count,
+            "stock_unknown_count":db.execute("SELECT COUNT(*) AS n FROM products WHERE stock IS NULL").fetchone()["n"],
+            "expert_review_count":db.execute("SELECT COUNT(*) AS n FROM reviews").fetchone()["n"],
+            "user_count":db.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"],
+            "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
 from research.evidence import mount_research
