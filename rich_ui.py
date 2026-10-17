@@ -95,6 +95,14 @@ for(const e of ["pointerdown","keydown","wheel","touchstart"])
 function idleLogoutCheck(){if(token&&Date.now()-lastUserActivity>=900000)logout("Tidak ada aktivitas selama 15 menit. Silakan masuk kembali.")}
 setInterval(idleLogoutCheck,15000);
 document.addEventListener("visibilitychange",idleLogoutCheck);
+setInterval(async()=>{
+ // Refresh server-side last activity only while the user has recently interacted.
+ // A truly idle browser never prolongs the session.
+ if(token&&Date.now()-lastUserActivity<120000){
+   try{await api("/v1/auth/me")}catch(_){}
+ }
+},180000);
+
 async function logout(message="Anda telah keluar dari ERP."){
  const old=token;
  sessionStorage.removeItem("liliang_token");sessionStorage.removeItem("liliang_last_activity");
@@ -439,10 +447,12 @@ async function downloadReport(path,format="pdf"){
 }
 async function printReport(path){
  try{
+  // Open synchronously in response to the click, before asynchronous fetch.
+  const w=window.open("about:blank","_blank");
+  if(!w)throw Error("Izinkan popup atau gunakan Download PDF untuk dicetak");
   const res=await fetch(path+(path.includes("?")?"&":"?")+"format=pdf",{cache:"no-store",headers:{"Authorization":"Bearer "+token}});
-  if(!res.ok)throw Error("Print gagal: HTTP "+res.status);
-  const u=URL.createObjectURL(await res.blob()),w=window.open(u,"_blank");
-  if(!w){URL.revokeObjectURL(u);throw Error("Izinkan popup atau unduh PDF untuk dicetak")}
+  if(!res.ok){w.close();throw Error("Print gagal: HTTP "+res.status)}
+  const u=URL.createObjectURL(await res.blob());w.location.href=u;
   setTimeout(()=>URL.revokeObjectURL(u),60000);toast("Dokumen PDF terbuka. Pilih Print dari penampil PDF.");
  }catch(e){fail(e)}
 }
