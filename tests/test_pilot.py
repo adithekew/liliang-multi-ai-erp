@@ -81,6 +81,24 @@ class PilotFlow(unittest.TestCase):
             # Multi-AI workspace is visible and accurately labeled as demo.
             homepage=client.get("/")
             self.assertEqual(homepage.status_code,200)
+            # All module pages are independent HTTP documents: deep links and refresh work.
+            for uri,identity in [
+                ("/workspace","hub"),("/dashboard","overview"),
+                ("/catalog","catalog"),("/inquiries","inquiries"),
+                ("/ai/hybrid","hybrid"),("/ai/evidence","research"),
+                ("/ai/status","systems"),("/sales/bundling","bundling"),
+                ("/inventory/forecast","forecast"),("/admin/users","users"),
+                ("/admin/roles","roles"),("/admin/catalog-migration","migration"),
+                ("/admin/audit","audit")
+            ]:
+                response_page=client.get(uri)
+                self.assertEqual(response_page.status_code,200,uri)
+                self.assertEqual(response_page.headers.get("X-ERP-Page"),identity)
+                self.assertIn("no-store",response_page.headers.get("Cache-Control",""))
+                self.assertIn("window.location.assign",response_page.text)
+                self.assertIn("cache:\"no-store\"",response_page.text)
+            self.assertIn("no-store",summary_response.headers.get("Cache-Control",""))
+
             self.assertIn("Multi-AI Workspace",homepage.text)
             caps=client.get("/v1/ai/capabilities",headers=admin)
             self.assertEqual(caps.status_code,200,caps.text)
@@ -172,6 +190,14 @@ class PilotFlow(unittest.TestCase):
             self.assertFalse(quality.json()["company_data_used"])
             self.assertEqual(quality.json()["product_quality"]["accepted"],5)
             self.assertEqual(quality.json()["inquiry_quality"]["accepted"],10)
+            training=client.get("/v1/research/training-readiness",headers=roles["technical"])
+            self.assertEqual(training.status_code,200,training.text)
+            self.assertEqual(training.json()["catalog_sku_count"],0)
+            self.assertEqual(training.json()["qualified_expert_labels"],0)
+            self.assertFalse(training.json()["model_weight_updates_performed"])
+            self.assertFalse(training.json()["research_accuracy_available"])
+            self.assertEqual(client.get("/v1/research/training-readiness",headers=roles["sales"]).status_code,403)
+
             self.assertIn("AI Research Evidence",homepage.text)
 
 if __name__=="__main__":
