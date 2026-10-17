@@ -24,12 +24,20 @@ METHODS = [
 ]
 
 def read_labels(db):
+    # Exclude synthetic-UAT identities and UAT-prefixed inquiries from
+    # research denominators. Their operational events remain in Audit Transactions.
     rows = db.execute("""SELECT r.id AS run_id,r.method,c.rank,c.product_id,p.sku
-                        FROM runs r JOIN candidates c ON c.run_id=r.id
+                        FROM runs r JOIN inquiries i ON i.id=r.inquiry_id
+                        JOIN users creator ON creator.id=i.created_by
+                        JOIN candidates c ON c.run_id=r.id
                         JOIN products p ON p.id=c.product_id
+                        WHERE LOWER(creator.email) NOT LIKE 'uat-%%@liliang.local'
+                        AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%%'
                         ORDER BY r.id,c.rank""").fetchall()
-    reviews=db.execute("""SELECT id,run_id,product_id,reviewer_id,label,decision
-                          FROM reviews ORDER BY id""").fetchall()
+    reviews=db.execute("""SELECT v.id,v.run_id,v.product_id,v.reviewer_id,v.label,v.decision
+                          FROM reviews v JOIN users reviewer ON reviewer.id=v.reviewer_id
+                          WHERE LOWER(reviewer.email) NOT LIKE 'uat-%%@liliang.local'
+                          ORDER BY v.id""").fetchall()
     runs=defaultdict(list)
     for row in rows:
         a=dict(row);runs[a["run_id"]].append(a)
@@ -76,6 +84,7 @@ def readiness(db):
     return {
         "status":"EVALUATION_READY_FOR_EXPLORATION" if d["ready"] else "INSUFFICIENT_EXPERT_LABELS",
         "pilot_data_only":True,
+        "uat_records_excluded_from_research":True,
         "evaluation_runs_total":count,
         "fully_labelled_runs":len(d["ready"]),
         "incomplete_runs":len(d["partial"]),
@@ -94,6 +103,7 @@ def readiness(db):
             "paired_bm25_dense_hybrid_same_queries":False
         },
         "scientific_readiness":"NOT_VALIDATED",
+        "uat_records_excluded_from_research":True,
         "data_provenance":"Pilot records; not an authorized representative test corpus",
         "next_action":"Technical should score each candidate 0-3, then independently adjudicate and lock a held-out test set before comparative evaluation."
     }
@@ -123,7 +133,7 @@ def evaluation(db):
         "warnings":[
            "Scores are descriptive of manually reviewed pilot runs, NOT held-out effectiveness or generalizable accuracy.",
            "Paired comparison needs matching inquiry IDs with BM25, dense-only and hybrid runs.",
-           "With only five demo SKUs, Recall@5 is trivially saturated and not persuasive.",
+           "The separate neural benchmark has five synthetic SKUs; its Recall@5 is not evidence of accuracy on the imported supplier catalog.",
            "No expert calibration, independence, adjudication, or locked train/dev/test has been established."
         ]
     }
