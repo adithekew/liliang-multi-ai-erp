@@ -101,7 +101,7 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(preview.json()["mode"],"lexical-only")
             self.assertEqual(preview.json()["candidates"][0]["sku"],"FLV-STRAW-01")
             # Shared saved matching run (read-only): no duplicate ranking is created.
-            list_view=client.get(f"/v1/inquiries/{inquiry_id}/latest-match",headers=admin)
+            list_view=client.get(f"/v1/inquiries/{iid}/latest-match",headers=admin)
             self.assertEqual(list_view.status_code,200,list_view.text)
             self.assertEqual(list_view.json()["candidates"][0]["sku"],"FLV-STRAW-01")
 
