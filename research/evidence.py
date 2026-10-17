@@ -31,12 +31,12 @@ def read_labels(db):
                         JOIN users creator ON creator.id=i.created_by
                         JOIN candidates c ON c.run_id=r.id
                         JOIN products p ON p.id=c.product_id
-                        WHERE LOWER(creator.email) NOT LIKE 'uat-%@liliang.local'
-                        AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%'
+                        WHERE LOWER(creator.email) NOT LIKE 'uat-%%@liliang.local'
+                        AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%%'
                         ORDER BY r.id,c.rank""").fetchall()
     reviews=db.execute("""SELECT v.id,v.run_id,v.product_id,v.reviewer_id,v.label,v.decision
                           FROM reviews v JOIN users reviewer ON reviewer.id=v.reviewer_id
-                          WHERE LOWER(reviewer.email) NOT LIKE 'uat-%@liliang.local'
+                          WHERE LOWER(reviewer.email) NOT LIKE 'uat-%%@liliang.local'
                           ORDER BY v.id""").fetchall()
     runs=defaultdict(list)
     for row in rows:
