@@ -182,6 +182,22 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
         audit(db,u,"MATCH_BASELINE","run",run.lastrowid,after={"method":"BM25","candidate_count":len(candidates),"latency_ms":elapsed})
     return {"run_id":run.lastrowid,"method":"bm25-expert-review-demo-v0.2","latency_ms":elapsed,
             "candidates":candidates,"notice":"BM25-only operational shortlist. Score is uncalibrated relevance, NOT accuracy or suitability probability. Neural evaluation is separate in Hybrid Semantic Lab. Technical review required."}
+@app.get("/v1/inquiries/{iid}/latest-match")
+def latest_match(iid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
+    q=db.execute("SELECT id,created_by,status FROM inquiries WHERE id=?",(iid,)).fetchone()
+    if not q:raise HTTPException(404,"Inquiry not found")
+    if u["role"]=="sales" and q["created_by"]!=u["id"]:
+        raise HTTPException(403,"Not your inquiry")
+    run=db.execute("SELECT id,method,latency_ms,created_at FROM runs WHERE inquiry_id=? ORDER BY id DESC LIMIT 1",(iid,)).fetchone()
+    if not run:return {"inquiry_id":iid,"status":q["status"],"run_id":None,"candidates":[]}
+    rows=db.execute("""SELECT c.rank,p.id product_id,p.sku,p.name,c.score,c.unknown,
+       (SELECT v.decision FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_decision,
+       (SELECT v.label FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_relevance
+       FROM candidates c JOIN products p ON p.id=c.product_id WHERE c.run_id=? ORDER BY c.rank""",(run["id"],)).fetchall()
+    return {"inquiry_id":iid,"status":q["status"],"run_id":run["id"],"method":run["method"],
+            "latency_ms":run["latency_ms"],"candidates":[dict(r) for r in rows],
+            "notice":"Candidates require Technical evaluation. The BM25 score is not an accuracy percentage."}
+
 @app.get("/v1/matches/{rid}")
 def show_match(rid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
     q=db.execute("SELECT r.*,i.created_by FROM runs r JOIN inquiries i ON i.id=r.inquiry_id WHERE r.id=?",(rid,)).fetchone()

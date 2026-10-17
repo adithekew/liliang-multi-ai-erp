@@ -139,12 +139,13 @@ async function overview(){
 let catalogPage=1,catalogQuery="";
 async function catalog(){
  let data=await api("/v1/catalog/products?q="+encodeURIComponent(catalogQuery)+"&page="+catalogPage+"&size=50");
+ const editable=["admin","gudang"].includes(me.role);
  $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
- "Katalog bersumber dari data demo atau PDF pemasok yang diimpor Admin. Informasi kegunaan bukan sertifikasi produk; stok NULL ditampilkan UNKNOWN.")+
- '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><span class="tag unknown">SOURCE-AWARE CATALOG</span></div>'+
+ "1.452 SKU dari PDF PT. Li Liang masih menunggu Technical validation. Stok yang belum dikonfirmasi Gudang ditampilkan UNKNOWN; jangan memasukkan stok simulasi pada katalog perusahaan.")+
+ '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div>'+
  '<div class="actions"><input id="catalogsearch" style="max-width:320px" value="'+escapeHtml(catalogQuery)+'" placeholder="Cari SKU, nama, pemakaian"><button class="btn" id="catalogfind">Cari</button><button class="btn secondary" id="catalogclear">Reset Filter</button></div>'+
- '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th></tr>'+
- data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td></tr>').join("")+
+ '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th>'+(editable?'<th>Inventory Action</th>':'')+'</tr>'+
+ data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td>'+(editable?'<td><button class="btn secondary" onclick="editStock('+x.id+')">Update Stock</button></td>':'')+'</tr>').join("")+
  '</table></div><div class="actions" style="margin-top:18px"><button class="btn secondary" id="prevcatalog" '+(catalogPage===1?"disabled":"")+'>← Sebelumnya</button><span class="small">Halaman '+catalogPage+' dari '+Math.max(1,Math.ceil(data.total/50))+'</span><button class="btn secondary" id="nextcatalog" '+(catalogPage*50>=data.total?"disabled":"")+'>Selanjutnya →</button></div></div>';
  $("catalogfind").onclick=()=>{catalogQuery=$("catalogsearch").value;catalogPage=1;catalog()};
  $("catalogsearch").onkeydown=e=>{if(e.key==="Enter"){catalogQuery=e.target.value;catalogPage=1;catalog()}};
@@ -152,26 +153,67 @@ async function catalog(){
  $("prevcatalog").onclick=()=>{catalogPage=Math.max(1,catalogPage-1);catalog()};
  $("nextcatalog").onclick=()=>{catalogPage++;catalog()};
 }
+async function editStock(id){
+ if(!["admin","gudang"].includes(me.role))return;
+ const raw=prompt("Kuantitas stok aktual terverifikasi untuk Product ID #"+id+". Jangan gunakan angka uji pada katalog perusahaan.");
+ if(raw===null)return;
+ const amount=Number(raw);
+ if(raw.trim()===""||!Number.isFinite(amount)||amount<0){toast("Stok harus berupa angka valid >= 0",true);return}
+ if(!confirm("Konfirmasi stok fisik terverifikasi: "+amount+" unit. Perubahan ini tersimpan permanen dan dicatat dalam Audit Transactions."))return;
+ try{await api("/v1/products/"+id+"/stock","PATCH",{stock_qty:amount});toast("Inventory update saved and audited.");await catalog()}
+ catch(err){fail(err)}
+}
 async function inquiries(){
- let rows=await api("/v1/inquiries"),canNew=["admin","sales"].includes(me.role);
- let create=canNew?'<div class="card"><h2>New Customer Inquiry</h2><form id="newinq"><label>Customer Reference (Anonymous)</label><input name="customer_ref" value="DEMO-ANON" maxlength="80"><label>Deskripsi Kebutuhan Flavor</label><textarea name="requirement" minlength="5" required placeholder="Contoh: Strawberry flavor untuk minuman susu..."></textarea><div class="form-actions"><button class="btn">Simpan Inquiry</button></div></form></div>':"";
- $("view").innerHTML=headline("ERP / SALES TO TECHNICAL","Inquiry & Matching Workflow","Inquiry disimpan sebelum pemeringkatan produk. Technical memvalidasi, Manager menyetujui.")+
- '<div class="grid two"><div>'+create+'</div><div class="card"><h2>Human-in-the-Loop</h2><p class="sub">1. Sales memasukkan requirement.<br>2. Sistem menghasilkan Top-5 kandidat BM25.<br>3. Technical menilai relevansi 0–3.<br>4. Manager melakukan approval apabila kandidat telah di-ACCEPT.</p><span class="tag unknown">No automatic sales</span></div></div>'+
- '<div class="card"><h2>Inquiry Register</h2><div class="tablewrap"><table><tr><th>ID</th><th>Customer</th><th>Requirement</th><th>Status</th><th>Action</th></tr>'+rows.map(x=>'<tr><td>#'+x.id+'</td><td>'+escapeHtml(x.customer_ref||"Restricted")+'</td><td>'+escapeHtml(x.requirement||"Restricted")+'</td><td><span class="tag">'+escapeHtml(x.status)+'</span></td><td>'+([
-"admin","sales","technical"].includes(me.role)?'<button class="btn secondary" onclick="matchInquiry('+x.id+')">Run Matching</button> ':'')+(['admin','manager'].includes(me.role)?'<button class="btn secondary" onclick="managerApproval('+x.id+')">Approval</button>':'')+'</td></tr>').join("")+'</table></div>'+(!rows.length?'<p class="empty">Belum ada inquiry. Buat satu permintaan dummy untuk memulai eksperimen.</p>':'')+'</div><div id="workflowResult"></div>';
- if(canNew)$("newinq").onsubmit=async e=>{e.preventDefault();try{const z=Object.fromEntries(new FormData(e.target));await api("/v1/inquiries","POST",z);toast("Inquiry disimpan");await inquiries()}catch(err){fail(err)}};
+ const rows=await api("/v1/inquiries");
+ const canNew=["admin","sales"].includes(me.role);
+ const create=canNew?'<div class="card"><h2>New Customer Inquiry</h2><form id="newinq"><label>Customer Reference (Anonymous)</label><input name="customer_ref" value="UAT-ANON" maxlength="80"><label>Deskripsi Kebutuhan Flavor</label><textarea name="requirement" minlength="5" required placeholder="Contoh: Butuh mango flavor untuk minuman."></textarea><div class="form-actions"><button class="btn">Simpan Inquiry</button></div></form></div>':"";
+ const tableRows=rows.map(x=>{
+  const actions=[];
+  if(x.status==="NEW"&&["sales","admin"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="matchInquiry('+x.id+')">Run BM25 Matching</button>');
+  if(x.status!=="NEW"&&["sales","admin","technical","manager"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="viewLatestMatch('+x.id+')">View Candidates</button>');
+  if(x.status==="TECH_REVIEWED"&&["admin","manager"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="managerApproval('+x.id+')">Approval / Return</button>');
+  return '<tr><td>#'+x.id+'</td><td>'+escapeHtml(x.customer_ref||"Restricted")+'</td><td>'+escapeHtml(x.requirement||"Restricted")+'</td><td><span class="tag">'+escapeHtml(x.status)+'</span></td><td>'+actions.join(" ")+'</td></tr>';
+ }).join("");
+ $("view").innerHTML=headline("ERP / SALES TO TECHNICAL","Inquiry & Matching Workflow",
+ "Sales membuat inquiry dan menjalankan matching satu kali; Technical melihat kandidat run yang sama; Manager meninjau keputusan Technical. Gudang hanya mengelola stok.")+
+ '<div class="grid two"><div>'+create+'</div><div class="card"><h2>Human-in-the-Loop</h2><p class="sub">1. Sales memasukkan requirement dan menjalankan BM25 Top-5.<br>2. Technical membuka kandidat yang tersimpan lalu memberi relevansi 0–3.<br>3. Manager melihat review dan menyetujui hanya jika ada ACCEPT.<br>4. Gudang memperbarui stok jika jumlahnya sudah terverifikasi.</p><span class="tag unknown">No automatic sales</span></div></div>'+
+ '<div class="card"><h2>Inquiry Register</h2><div class="tablewrap"><table><tr><th>ID</th><th>Customer</th><th>Requirement</th><th>Status</th><th>Action</th></tr>'+tableRows+'</table></div>'+(!rows.length?'<p class="empty">Belum ada inquiry baru. Gunakan contoh anonim untuk UAT, bukan data pelanggan nyata.</p>':'')+'</div><div id="workflowResult"></div>';
+ if(canNew)$("newinq").onsubmit=async e=>{e.preventDefault();try{
+  const z=Object.fromEntries(new FormData(e.target));
+  await api("/v1/inquiries","POST",z);toast("Inquiry disimpan");await inquiries()
+ }catch(err){fail(err)}};
+}
+function displayCandidates(d){
+ const run=d.run_id||null;
+ if(!run){$("workflowResult").innerHTML='<div class="card"><p class="empty">Belum ada matching untuk inquiry ini.</p></div>';return}
+ $("workflowResult").innerHTML='<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
+ d.candidates.map(x=>{
+  const label=x.expert_decision?escapeHtml(x.expert_decision)+" / relevance "+escapeHtml(x.expert_relevance):"PENDING";
+  const control=(me.role==="technical"&&!x.expert_decision)?'<button class="btn secondary" onclick="expertReview('+run+','+x.product_id+')">Review 0–3</button>':"—";
+  return '<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.name)+'</td><td>'+x.score+'</td><td><span class="tag unknown">'+label+'</span></td><td>'+control+'</td></tr>';
+ }).join("")+'</table></div><p class="note">All stock, halal and regulatory suitability remain UNKNOWN without verified evidence. Scores are not probabilities.</p></div>';
+ $("workflowResult").scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function matchInquiry(id){
- try{let d=await api("/v1/inquiries/"+id+"/match","POST");
- $("workflowResult").innerHTML='<div class="card"><div class="toolbar"><h2>Ranking Run #'+d.run_id+'</h2><span class="tag unknown">'+escapeHtml(d.method)+'</span></div><p class="sub">'+escapeHtml(d.notice)+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>Score</th><th>Constraint</th><th>Review</th></tr>'+d.candidates.map(x=>'<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.name)+'</td><td>'+x.score+'</td><td>UNKNOWN</td><td>'+ (me.role==="technical"?'<button class="btn secondary" onclick="expertReview('+d.run_id+','+x.product_id+')">Validate</button>':'Technical required')+'</td></tr>').join("")+'</table></div></div>';
- $("workflowResult").scrollIntoView({behavior:"smooth",block:"start"});
+ try{
+  const d=await api("/v1/inquiries/"+id+"/match","POST");
+  displayCandidates(d);
+ }catch(e){fail(e)}
+}
+async function viewLatestMatch(id){
+ try{
+  const d=await api("/v1/inquiries/"+id+"/latest-match");
+  displayCandidates(d);
  }catch(e){fail(e)}
 }
 async function expertReview(run,product){
  if(me.role!=="technical")return;
  let decision=prompt("Technical decision (ACCEPT / REJECT / NEEDS_INFO)","ACCEPT");if(!decision)return;
  let label=prompt("Expert relevance label 0–3","3");if(label===null)return;
- let rationale=prompt("Technical rationale (min. 5 karakter)","Checked against synthetic requirements");if(!rationale)return;
+ let rationale=prompt("Technical rationale (min. 5 karakter)","UAT relevance review; product suitability still pending evidence");if(!rationale)return;
  try{await api("/v1/matches/"+run+"/review","POST",{product_id:product,decision,relevance_label:Number(label),rationale});toast("Technical review tersimpan");await inquiries()}catch(e){fail(e)}
 }
 async function managerApproval(id){
