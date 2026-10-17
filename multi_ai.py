@@ -175,7 +175,14 @@ def mount_ai(app,current,get_db):
         fixture=public_cases()
         counts=db.execute("SELECT COUNT(*) AS n FROM products").fetchone()["n"]
         inquiry_count=db.execute("SELECT COUNT(*) AS n FROM inquiries").fetchone()["n"]
-        reviews=db.execute("SELECT COUNT(*) AS n FROM reviews").fetchone()["n"]
+        reviews=db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users reviewer ON reviewer.id=v.reviewer_id
+            JOIN runs r ON r.id=v.run_id JOIN inquiries i ON i.id=r.inquiry_id
+            JOIN users creator ON creator.id=i.created_by
+            WHERE LOWER(reviewer.email) NOT LIKE 'uat-%@liliang.local'
+              AND LOWER(creator.email) NOT LIKE 'uat-%@liliang.local'
+              AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%'""").fetchone()["n"]
+        uat_reviews=db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users u ON u.id=v.reviewer_id
+            WHERE LOWER(u.email) LIKE 'uat-%@liliang.local'""").fetchone()["n"]
         company_products=db.execute("SELECT COUNT(*) AS n FROM products WHERE source_ref='CATALOG-PDF-UNVERIFIED'").fetchone()["n"]
         backend=engine_name()
         return {
@@ -185,6 +192,7 @@ def mount_ai(app,current,get_db):
             "product_count":counts,
             "inquiry_count":inquiry_count,
             "expert_review_count":reviews,
+            "uat_review_count_excluded_from_research":uat_reviews,
             "model_validated_for_company":False,
             "company_fine_tuning_completed":False,
             "production_ready":False,
