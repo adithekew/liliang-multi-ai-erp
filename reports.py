@@ -99,17 +99,17 @@ def report_rows(kind,user,db,limit=500):
                            FROM transaction_events ORDER BY at DESC LIMIT ?""",(limit,)).fetchall()
         values=[[r["at"],r["actor_id"],r["actor_role"],r["action"],r["entity"],r["entity_id"],r["id"]] for r in rows]
     elif kind=="ai_bundling":
-        from multi_ai import association_rules
-        rules=association_rules()
-        values=[[x.get(k) for k in ("antecedent","consequent","count","support","confidence","lift")] for x in rules[:limit]]
+        from multi_ai import bundling_rules
+        rules=bundling_rules()
+        values=[[x.get(k) for k in ("antecedent_sku","recommended_sku","co_occurrences","support","confidence","lift")] for x in rules[:limit]]
         source="SYNTHETIC_ORDER_BASKETS_NOT_COMPANY_SALES"
     elif kind=="ai_forecast":
         from multi_ai import forecast_baseline
         data=forecast_baseline("FLV-STRAW-01",4)
         # This report is intentionally limited to a fixed synthetic SKU.
         values=[]
-        for i,x in enumerate(data.get("history",[]),1):values.append([i,x,None,"FLV-STRAW-01"])
-        for i,x in enumerate(data.get("forecast",[]),len(data.get("history",[]))+1):values.append([i,None,x,"FLV-STRAW-01"])
+        for x in data.get("history",[]):values.append([x["week"],x["units"],None,"FLV-STRAW-01"])
+        for x in data.get("forecast",[]):values.append([x["week"],None,x["predicted_units"],"FLV-STRAW-01"])
         values=values[:limit];source="SYNTHETIC_DEMAND_NOT_COMPANY_SALES"
     else:
         from research.evidence import readiness, methodology
