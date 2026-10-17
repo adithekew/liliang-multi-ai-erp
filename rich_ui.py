@@ -59,7 +59,7 @@ const PAGE_URLS={
  overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
- audit:"/admin/audit"
+ audit:"/admin/audit",reports:"/reports"
 };
 const INITIAL_PAGE=Object.keys(PAGE_URLS).find(k=>PAGE_URLS[k]===window.location.pathname) || "hub";
 let token=sessionStorage.getItem("liliang_token")||"",me=null,page=INITIAL_PAGE,capabilities=[];
@@ -74,16 +74,38 @@ try{
 async function api(path,method="GET",body=null){
  let opt={method,cache:"no-store",credentials:"same-origin",headers:{"Content-Type":"application/json","Cache-Control":"no-store",...(token?{"Authorization":"Bearer "+token}:{})}};
  if(body!==null)opt.body=JSON.stringify(body);
- let res=await fetch(path,opt),json;try{json=await res.json()}catch{throw Error("Server HTTP "+res.status+" did not return JSON. Check service logs and /readyz.");}
+ let res=await fetch(path,opt),json;
+ if(res.status===401 && path!=="/v1/auth/login"){
+   sessionStorage.removeItem("liliang_token");sessionStorage.removeItem("liliang_last_activity");token="";
+   loginScreen("Sesi berakhir. Silakan login ulang.");throw Error("Session expired. Please login again.");
+ }
+ try{json=await res.json()}catch{throw Error("Server HTTP "+res.status+" did not return JSON. Check service logs and /readyz.");}
  if(!res.ok)throw Error(typeof json.detail==="string"?json.detail:JSON.stringify(json.detail||json));
  return json;
 }
 function toast(s,error=false){const t=$("toast");t.textContent=s;t.style.background=error?"#ad3345":"#173858";t.style.display="block";setTimeout(()=>t.style.display="none",3900)}
 function fail(e){toast(e.message||String(e),true)}
-function logout(){sessionStorage.removeItem("liliang_token");token="";me=null;window.location.replace("/")}
-function loginScreen(){
+let lastUserActivity=Number(sessionStorage.getItem("liliang_last_activity"))||Date.now();
+function recordActivity(){
+ const now=Date.now();
+ if(now-lastUserActivity>1000){lastUserActivity=now;sessionStorage.setItem("liliang_last_activity",String(now))}
+}
+for(const e of ["pointerdown","keydown","wheel","touchstart"])
+ document.addEventListener(e,recordActivity,{passive:true});
+function idleLogoutCheck(){if(token&&Date.now()-lastUserActivity>=900000)logout("Tidak ada aktivitas selama 15 menit. Silakan masuk kembali.")}
+setInterval(idleLogoutCheck,15000);
+document.addEventListener("visibilitychange",idleLogoutCheck);
+async function logout(message="Anda telah keluar dari ERP."){
+ const old=token;
+ sessionStorage.removeItem("liliang_token");sessionStorage.removeItem("liliang_last_activity");
+ token="";me=null;
+ if(old)try{await fetch("/v1/auth/logout",{method:"POST",cache:"no-store",headers:{"Authorization":"Bearer "+old}})}catch(_){}
+ loginScreen(message);
+}
+function loginScreen(message=""){
  $("root").innerHTML='<main id="loginwrap"><section class="login"><div class="logo">L</div><div class="eyebrow">RESEARCH PILOT / CLOUD</div><h1>ERP Multi-AI PT. Liliang</h1><p class="sub">Integrated B2B Flavor Workflow & Intelligent Decision Support</p><form id="signin"><label>Email Akun Internal</label><input type="email" name="email" required autocomplete="username" placeholder="admin@liliang.local"><label>Password</label><input type="password" name="password" required autocomplete="current-password"><div class="form-actions"><button class="btn" style="width:100%">Masuk ke ERP →</button></div></form><p class="fine">Research development environment. Jangan masukkan data customer atau informasi rahasia perusahaan.</p><p class="error" id="loginerror"></p></section></main>';
- $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);await enter()}catch(err){$("loginerror").textContent=err.message}};
+ $("loginerror").textContent=message;
+ $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);recordActivity();await enter()}catch(err){$("loginerror").textContent=err.message}};
 }
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
@@ -98,10 +120,12 @@ const menu=[
  ["users","⚙","User Management","ADMIN"],
  ["roles","♙","UAT Role Accounts","ADMIN"],
  ["migration","⇄","Catalog Migration","ADMIN"],
- ["audit","≡","Audit Transactions","ADMIN"]
+ ["audit","≡","Audit Transactions","ADMIN"],
+ ["reports","▤","Report Center & Cetak","REPORTING"]
 ];
 function allowed(key){
  if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
+ if(key==="reports")return true;
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research")return ["admin","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
@@ -114,7 +138,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<a class="navitem '+(page===x[0]?"active":"")+'" href="'+PAGE_URLS[x[0]]+'"><span>'+x[1]+'</span>'+x[2]+'</a>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.7 · audited ERP catalog<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  // Sidebar links now trigger distinct HTTP GET pages (supports deep links & refresh).
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -122,11 +146,11 @@ async function enter(){
  try{me=await api("/v1/auth/me");let x=await api("/v1/ai/capabilities");capabilities=x.modules;page=INITIAL_PAGE;
  if(!allowed(page)){window.location.replace(PAGE_URLS.hub);return}
  frame();await show()}
- catch(e){if(e.message.includes("expired")||e.message.includes("Login"))logout();else{fail(e);loginScreen()}}
+ catch(e){token="";sessionStorage.removeItem("liliang_token");loginScreen("Sesi tidak valid. Silakan login kembali. "+e.message)}
 }
 function navigate(p){if(!allowed(p)||!PAGE_URLS[p])return;window.location.assign(PAGE_URLS[p])}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -397,6 +421,50 @@ async function migration(){
    toast("Imported "+r.imported_count+" catalog records");await migration();
   }catch(e){fail(e);$("importresult").textContent=e.message;$("importcatalog").disabled=false}
  };
+}
+
+async function downloadReport(path,format="pdf"){
+ try{
+  const res=await fetch(path+(path.includes("?")?"&":"?")+"format="+format,{cache:"no-store",headers:{"Authorization":"Bearer "+token}});
+  if(res.status===401){sessionStorage.removeItem("liliang_token");token="";loginScreen("Sesi habis. Login kembali.");return}
+  if(!res.ok)throw Error("Download gagal: HTTP "+res.status);
+  const blob=await res.blob(),url=URL.createObjectURL(blob);
+  const disp=res.headers.get("content-disposition")||"",match=disp.match(/filename="([^"]+)"/);
+  const a=document.createElement("a");a.href=url;a.download=match?match[1]:"Liliang_Report."+format;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  toast("Laporan "+format.toUpperCase()+" siap diunduh.");
+ }catch(e){fail(e)}
+}
+async function printReport(path){
+ try{
+  const res=await fetch(path+(path.includes("?")?"&":"?")+"format=pdf",{cache:"no-store",headers:{"Authorization":"Bearer "+token}});
+  if(!res.ok)throw Error("Print gagal: HTTP "+res.status);
+  const u=URL.createObjectURL(await res.blob()),w=window.open(u,"_blank");
+  if(!w){URL.revokeObjectURL(u);throw Error("Izinkan popup atau unduh PDF untuk dicetak")}
+  setTimeout(()=>URL.revokeObjectURL(u),60000);toast("Dokumen PDF terbuka. Pilih Print dari penampil PDF.");
+ }catch(e){fail(e)}
+}
+async function reportCenter(){
+ const d=await api("/v1/reports/available");
+ const cards=d.reports.map(r=>{
+  const p="/v1/reports/"+encodeURIComponent(r.id);
+  return '<div class="card"><h2>'+escapeHtml(r.title)+'</h2><p class="small">'+escapeHtml(r.id)+'</p><div class="actions">'+
+  '<button class="btn" onclick="downloadReport(\''+p+'\',\'pdf\')">Download PDF</button>'+
+  '<button class="btn secondary" onclick="downloadReport(\''+p+'\',\'csv\')">Export CSV</button>'+
+  '<button class="btn secondary" onclick="printReport(\''+p+'\')">Cetak</button></div></div>';
+ }).join("");
+ $("view").innerHTML=headline("ERP / REPORTS","Report Center & Cetak Semua Transaksi",
+ "Data dibaca dari Neon setiap permintaan. Akses dibatasi oleh role. PDF dan CSV dibuat oleh server tanpa cache perangkat.")+
+ '<div class="card"><h2>Report Transaksi Inquiry</h2><p class="sub">Laporan per nomor Inquiry memuat customer reference, hasil BM25 Top-5, review Technical, dan keputusan Manager.</p>'+
+ '<div class="actions"><input id="reportInquiry" style="max-width:220px" type="number" min="1" placeholder="Inquiry ID">'+
+ '<button class="btn" id="reportPdf">PDF</button><button class="btn secondary" id="reportCsv">CSV</button>'+
+ '<button class="btn secondary" id="reportPrint">Cetak</button></div></div>'+
+ '<div class="toolbar"><h2>Report per Modul</h2><span class="tag unknown">LIVE DATA / SYNTHETIC AI LABELED</span></div>'+
+ '<div class="grid two">'+cards+'</div><p class="note">Katalog 1.452 SKU: API mendukung limit=2000 untuk cetak seluruh data. Default 500 agar ekspor tidak terlalu berat di Render Free.</p>';
+ const target=()=>{const n=Number($("reportInquiry").value);if(!Number.isInteger(n)||n<1){toast("Isi Inquiry ID yang valid",true);return null}return "/v1/reports/inquiry/"+n};
+ $("reportPdf").onclick=()=>{const t=target();if(t)downloadReport(t,"pdf")};
+ $("reportCsv").onclick=()=>{const t=target();if(t)downloadReport(t,"csv")};
+ $("reportPrint").onclick=()=>{const t=target();if(t)printReport(t)};
 }
 async function auditTrail(){
  const [x,old]=await Promise.all([api("/v1/admin/audit-events?limit=200"),api("/v1/admin/catalog/imports")]);
