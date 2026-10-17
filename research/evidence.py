@@ -191,6 +191,56 @@ def mount_research(app,current,get_db):
     def permit_research(u):
         if u["role"] not in ("admin","manager","technical"):
             raise HTTPException(403,"Research evaluation access denied")
+    @app.get("/v1/research/training-readiness")
+    def research_training_readiness(u=Depends(current),db=Depends(get_db)):
+        permit_research(u)
+        supplier_count=db.execute("""SELECT COUNT(*) AS n FROM products
+               WHERE source_ref='CATALOG-PDF-UNVERIFIED'""").fetchone()["n"]
+        imported_batches=db.execute("SELECT COUNT(*) AS n FROM catalog_import_batches").fetchone()["n"]
+        # UAT role labels and UAT-prefixed customer refs are not research ground truth.
+        labels=db.execute("""SELECT COUNT(*) AS n FROM reviews v
+            JOIN runs r ON r.id=v.run_id
+            JOIN inquiries i ON i.id=r.inquiry_id
+            JOIN users reviewer ON reviewer.id=v.reviewer_id
+            JOIN users creator ON creator.id=i.created_by
+            WHERE v.label BETWEEN 0 AND 3
+              AND substr(lower(reviewer.email),1,4)<>'uat-'
+              AND substr(lower(creator.email),1,4)<>'uat-'
+              AND substr(upper(COALESCE(i.customer_ref,'')),1,4)<>'UAT-'""").fetchone()["n"]
+        qualified_pairs=0  # No independent adjudication / locked holdout is established yet.
+        gates=[
+            {"stage":"1. Product corpus","ready":bool(supplier_count),
+             "requirement":str(supplier_count)+" unverified catalog SKU candidates; no claim of verified product suitability."},
+            {"stage":"2. Authorization and provenance","ready":False,
+             "requirement":"Written company authorization for research use of customer inquiries, labels, and approved datasheet evidence."},
+            {"stage":"3. Inquiry cleansing","ready":False,
+             "requirement":"Real approved inquiries, PII quarantine, normalization, dedup, and row-level lineage."},
+            {"stage":"4. Expert labels (0–3)","ready":False,
+             "requirement":str(labels)+" pilot labels; independent double review and adjudication still unverified. UAT excluded."},
+            {"stage":"5. Group/time heldout split","ready":False,
+             "requirement":"Lock train/dev/test by customer/project and time, prevent paraphrase and SKU leakage."},
+            {"stage":"6. Baseline / fine-tuning","ready":False,
+             "requirement":"Compare BM25, frozen MiniLM dense and RRF on the same heldout inquiries before domain fine-tuning."},
+            {"stage":"7. Publishable evaluation","ready":False,
+             "requirement":"Heldout nDCG@5, MRR@5, Recall@5, latency, expert agreement and provenance audit."}
+        ]
+        return {
+            "status":"DATA_COLLECTION_REQUIRED",
+            "catalog_sku_count":supplier_count,
+            "catalog_import_batches":imported_batches,
+            "qualified_expert_labels":qualified_pairs,
+            "observed_non_uat_pilot_labels":labels,
+            "locked_heldout_test":False,
+            "company_fine_tuned_model_count":0,
+            "data_source":"UNVERIFIED_SUPPLIER_CATALOG" if supplier_count else "DEMO_ONLY",
+            "training_method":"Proposed multilingual MiniLM contrastive bi-encoder fine-tuning; NOT STARTED",
+            "training_runtime":"OFFLINE_PRIVATE_COMPUTE_REQUIRED_NOT_RENDER_FREE",
+            "model_weight_updates_performed":False,
+            "research_accuracy_available":False,
+            "gates":gates,
+            "scientific_warning":"Product SKU catalog alone cannot train or validate supervised semantic matching. UAT labels are excluded."
+        }
+
     @app.get("/v1/research/methodology")
     def research_methodology(u=Depends(current)):
         permit_research(u)
