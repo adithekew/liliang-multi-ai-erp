@@ -178,11 +178,11 @@ def mount_ai(app,current,get_db):
         reviews=db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users reviewer ON reviewer.id=v.reviewer_id
             JOIN runs r ON r.id=v.run_id JOIN inquiries i ON i.id=r.inquiry_id
             JOIN users creator ON creator.id=i.created_by
-            WHERE LOWER(reviewer.email) NOT LIKE 'uat-%@liliang.local'
-              AND LOWER(creator.email) NOT LIKE 'uat-%@liliang.local'
-              AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%'""").fetchone()["n"]
+            WHERE LOWER(reviewer.email) NOT LIKE 'uat-%%@liliang.local'
+              AND LOWER(creator.email) NOT LIKE 'uat-%%@liliang.local'
+              AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%%'""").fetchone()["n"]
         uat_reviews=db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users u ON u.id=v.reviewer_id
-            WHERE LOWER(u.email) LIKE 'uat-%@liliang.local'""").fetchone()["n"]
+            WHERE LOWER(u.email) LIKE 'uat-%%@liliang.local'""").fetchone()["n"]
         company_products=db.execute("SELECT COUNT(*) AS n FROM products WHERE source_ref='CATALOG-PDF-UNVERIFIED'").fetchone()["n"]
         backend=engine_name()
         return {
