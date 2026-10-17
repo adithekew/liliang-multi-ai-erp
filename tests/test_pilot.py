@@ -81,9 +81,9 @@ class PilotFlow(unittest.TestCase):
             # Every ERP & AI module exposes an authenticated fresh report export.
             available=client.get("/v1/reports/available",headers=admin)
             self.assertEqual(available.status_code,200,available.text)
-            self.assertEqual(len(available.json()["reports"]),10)
+            self.assertEqual(len(available.json()["reports"]),12)
             for report_kind in ("inquiries","matching","technical_reviews","manager_decisions",
-                                "stock_movements","catalog","audit","ai_bundling",
+                                "stock_movements","catalog","audit","ai_requirement","ai_hybrid","ai_bundling",
                                 "ai_forecast","ai_research"):
                 pdf=client.get("/v1/reports/"+report_kind+"?format=pdf",headers=admin)
                 self.assertEqual(pdf.status_code,200,report_kind+": "+pdf.text[:180] if pdf.status_code!=200 else "")
