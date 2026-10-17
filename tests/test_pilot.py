@@ -78,6 +78,27 @@ class PilotFlow(unittest.TestCase):
             warehouse=client.get("/v1/inquiries",headers=roles["gudang"]).json()[0]
             self.assertNotIn("requirement",warehouse)
             self.assertNotIn("customer_ref",warehouse)
+            # Every ERP & AI module exposes an authenticated fresh report export.
+            available=client.get("/v1/reports/available",headers=admin)
+            self.assertEqual(available.status_code,200,available.text)
+            self.assertEqual(len(available.json()["reports"]),10)
+            for report_kind in ("inquiries","matching","technical_reviews","manager_decisions",
+                                "stock_movements","catalog","audit","ai_bundling",
+                                "ai_forecast","ai_research"):
+                pdf=client.get("/v1/reports/"+report_kind+"?format=pdf",headers=admin)
+                self.assertEqual(pdf.status_code,200,report_kind+": "+pdf.text[:180] if pdf.status_code!=200 else "")
+                self.assertTrue(pdf.content.startswith(b"%PDF"),report_kind)
+                self.assertIn("no-store",pdf.headers["Cache-Control"])
+                csv=client.get("/v1/reports/"+report_kind+"?format=csv",headers=admin)
+                self.assertEqual(csv.status_code,200,csv.text[:180])
+                self.assertIn("attachment;",csv.headers["Content-Disposition"])
+            detail=client.get(f"/v1/reports/inquiry/{iid}?format=pdf",headers=roles["sales"])
+            self.assertEqual(detail.status_code,200,detail.text[:180] if detail.status_code!=200 else "")
+            self.assertTrue(detail.content.startswith(b"%PDF"))
+            self.assertEqual(client.get("/v1/reports/audit",headers=roles["sales"]).status_code,403)
+            self.assertEqual(client.get("/v1/reports/technical_reviews",headers=roles["gudang"]).status_code,403)
+            self.assertEqual(client.get("/v1/reports/inquiry/999999",headers=roles["sales"]).status_code,404)
+
             # Multi-AI workspace is visible and accurately labeled as demo.
             homepage=client.get("/")
             self.assertEqual(homepage.status_code,200)
@@ -199,6 +220,13 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(client.get("/v1/research/training-readiness",headers=roles["sales"]).status_code,403)
 
             self.assertIn("AI Research Evidence",homepage.text)
+            # Server-backed session revocation and post-logout 401.
+            self.assertEqual(client.get("/v1/auth/me",headers=roles["gudang"]).status_code,200)
+            signed_out=client.post("/v1/auth/logout",headers=roles["gudang"])
+            self.assertEqual(signed_out.status_code,200,signed_out.text)
+            self.assertTrue(signed_out.json()["session_revoked"])
+            self.assertEqual(client.get("/v1/auth/me",headers=roles["gudang"]).status_code,401)
+
 
 if __name__=="__main__":
     unittest.main()
