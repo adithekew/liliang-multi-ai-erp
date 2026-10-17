@@ -49,6 +49,13 @@ def scalar(v):
     if isinstance(v,(dict,list)):return json.dumps(v,ensure_ascii=False,sort_keys=True)
     return str(v)
 
+def csv_excel_safe(value):
+    """Prevent Excel formula injection when opening user-supplied inquiry text."""
+    result=scalar(value)
+    if result.lstrip().startswith(("=","+","-","@")) or result.startswith(("\t","\r","\n")):
+        return "'"+result
+    return result
+
 def json_fields(text):
     try:return json.loads(text or "{}")
     except (ValueError,TypeError):return {}
@@ -205,7 +212,7 @@ def export(report,fmt,filename):
         w.writerow(["Title",report["title"]]);w.writerow(["Source",report["source"]])
         w.writerow(["Generated UTC",report["generated_at"]]);w.writerow([])
         w.writerow(report["columns"])
-        for row in report["rows"]:w.writerow([scalar(x) for x in row])
+        for row in report["rows"]:w.writerow([csv_excel_safe(x) for x in row])
         return Response(buf.getvalue().encode("utf-8-sig"),media_type="text/csv; charset=utf-8",headers={**NO_STORE,"Content-Disposition":'attachment; filename="'+filename+'.csv"'})
     content=render_pdf(report)
     return Response(content,media_type="application/pdf",headers={**NO_STORE,"Content-Disposition":'attachment; filename="'+filename+'.pdf"'})
