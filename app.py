@@ -243,11 +243,11 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "expert_review_count":db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users reviewer ON reviewer.id=v.reviewer_id
                 JOIN runs r ON r.id=v.run_id JOIN inquiries i ON i.id=r.inquiry_id
                 JOIN users creator ON creator.id=i.created_by
-                WHERE LOWER(reviewer.email) NOT LIKE 'uat-%@liliang.local'
-                  AND LOWER(creator.email) NOT LIKE 'uat-%@liliang.local'
-                  AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%'""").fetchone()["n"],
+                WHERE LOWER(reviewer.email) NOT LIKE 'uat-%%@liliang.local'
+                  AND LOWER(creator.email) NOT LIKE 'uat-%%@liliang.local'
+                  AND UPPER(COALESCE(i.customer_ref,'')) NOT LIKE 'UAT-%%'""").fetchone()["n"],
             "uat_review_count":db.execute("""SELECT COUNT(*) AS n FROM reviews v JOIN users u ON u.id=v.reviewer_id
-                WHERE LOWER(u.email) LIKE 'uat-%@liliang.local'""").fetchone()["n"],
+                WHERE LOWER(u.email) LIKE 'uat-%%@liliang.local'""").fetchone()["n"],
             "user_count":db.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"],
             "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
