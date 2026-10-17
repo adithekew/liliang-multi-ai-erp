@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS transaction_events(id TEXT PRIMARY KEY,actor_id INTEG
 CREATE TABLE IF NOT EXISTS reset_archives(id TEXT PRIMARY KEY,actor_id INTEGER,at TEXT,counts_json TEXT,archive_json TEXT,payload_sha256 TEXT);
 CREATE TABLE IF NOT EXISTS catalog_import_batches(id TEXT PRIMARY KEY,source_sha256 TEXT UNIQUE,source_file TEXT,catalog_version TEXT,items_imported INTEGER,actor_id INTEGER,at TEXT,source_classification TEXT);
 CREATE TABLE IF NOT EXISTS catalog_product_details(sku TEXT PRIMARY KEY,product_type TEXT,application_raw TEXT,composition_raw TEXT,source_page INTEGER,source_number INTEGER,source_sha256 TEXT,batch_id TEXT);
+CREATE TABLE IF NOT EXISTS user_sessions(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,created_at REAL NOT NULL,last_seen_at REAL NOT NULL,expires_at REAL NOT NULL,revoked_at REAL);
 
 """
 TABLES_WITH_IDS = {"users","products","inquiries","runs","candidates","reviews","audits"}
