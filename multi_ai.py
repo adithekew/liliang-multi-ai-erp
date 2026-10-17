@@ -153,16 +153,19 @@ class RequirementRequest(BaseModel):
     text:str=Field(min_length=5,max_length=3000)
 def mount_ai(app,current,get_db):
     @app.get("/v1/ai/capabilities")
-    def get_capabilities(u=Depends(current)):
+    def get_capabilities(u=Depends(current),db=Depends(get_db)):
         from research.hybrid_demo import load_fixture
         modules=[dict(x) for x in CAPABILITIES]
+        company_count=db.execute("SELECT COUNT(*) AS n FROM products WHERE source_ref='CATALOG-PDF-UNVERIFIED'").fetchone()["n"]
+        if company_count:
+            modules[1]["dataset"]=str(company_count)+" supplier-catalog SKUs (pending Technical validation)"
+            modules[1]["status"]="BM25_ONLINE_COMPANY_CATALOG_UNVERIFIED"
         if load_fixture():
-            modules[1]["method"]="BM25 + real multilingual dense embeddings + RRF (fixed-query demo)"
-            modules[1]["status"]="NEURAL_FIXED_QUERY_DEMO"
-            modules[1]["research_role"]="Primary research target; online inference and expert validation pending"
+            modules[1]["method"]="Online BM25 lexical ranking; separate MiniLM 384d + RRF fixed synthetic benchmark"
+            modules[1]["research_role"]="Primary research target; online neural inference and company expert labels pending"
         return {"modules":modules,"all_models_validated":False,
-                "data_scope":"SYNTHETIC_PILOT",
-                "scientific_note":"Results are demonstrations, not measured findings for PT Liliang."}
+                "data_scope":"COMPANY_CATALOG_UNVERIFIED_WITH_SYNTHETIC_AI03_AI04" if company_count else "SYNTHETIC_PILOT",
+                "scientific_note":"Supplier catalog is not verified suitability evidence. Neural lab uses synthetic fixtures; no company relevance/accuracy claims."}
 
     @app.get("/v1/ai/system-status")
     def system_status(u=Depends(current),db=Depends(get_db)):
