@@ -189,7 +189,7 @@ async function catalog(){
  const editable=["admin","gudang"].includes(me.role);
  $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
  "1.452 SKU dari PDF PT. Li Liang masih menunggu Technical validation. Stok yang belum dikonfirmasi Gudang ditampilkan UNKNOWN; jangan memasukkan stok simulasi pada katalog perusahaan.")+
- '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div>'+
+ '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'pdf\')">PDF 1.452 SKU</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'csv\')">CSV Semua SKU</button><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div></div>'+
  '<div class="actions"><input id="catalogsearch" style="max-width:320px" value="'+escapeHtml(catalogQuery)+'" placeholder="Cari SKU, nama, pemakaian"><button class="btn" id="catalogfind">Cari</button><button class="btn secondary" id="catalogclear">Reset Filter</button></div>'+
  '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th>'+(editable?'<th>Inventory Action</th>':'')+'</tr>'+
  data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td>'+(editable?'<td><button class="btn secondary" onclick="editStock('+x.id+')">Update Stock</button></td>':'')+'</tr>').join("")+
@@ -222,6 +222,8 @@ async function inquiries(){
    actions.push('<button class="btn secondary" onclick="viewLatestMatch('+x.id+')">View Candidates</button>');
   if(x.status==="TECH_REVIEWED"&&["admin","manager"].includes(me.role))
    actions.push('<button class="btn secondary" onclick="managerApproval('+x.id+')">Approval / Return</button>');
+  if(["admin","sales","technical","manager"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="printReport(\'/v1/reports/inquiry/'+x.id+'\')">Cetak PDF</button>');
   return '<tr><td>#'+x.id+'</td><td>'+escapeHtml(x.customer_ref||"Restricted")+'</td><td>'+escapeHtml(x.requirement||"Restricted")+'</td><td><span class="tag">'+escapeHtml(x.status)+'</span></td><td>'+actions.join(" ")+'</td></tr>';
  }).join("");
  $("view").innerHTML=headline("ERP / SALES TO TECHNICAL","Inquiry & Matching Workflow",
@@ -272,7 +274,7 @@ async function bundling(){
  let d=await api("/v1/ai/bundling");
  $("view").innerHTML=headline("AI-03 / SALES INTELLIGENCE","Product Bundling Insights","Analisis ko-pembelian memakai association rules dari 16 keranjang transaksi sintetis. Tidak ada histori PT. Liliang yang digunakan.")+
  '<div class="grid"><div class="card"><div class="kpi-lbl">Synthetic Baskets</div><div class="kpi">'+d.basket_count+'</div></div><div class="card"><div class="kpi-lbl">Candidate Rules</div><div class="kpi">'+d.rules.length+'</div></div><div class="card"><div class="kpi-lbl">Auto-Sell</div><div class="kpi">OFF</div></div><div class="card"><div class="kpi-lbl">Data Source</div><div class="kpi" style="font-size:20px">DEMO</div></div></div>'+
- '<div class="card"><h2>Frequently Bought Together · Association Rules</h2><div class="tablewrap"><table><tr><th>When customer buys</th><th>Also bought</th><th>Count</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+d.rules.map(x=>'<tr><td><b>'+escapeHtml(x.antecedent_sku)+'</b></td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.co_occurrences+'</td><td>'+(x.support*100).toFixed(1)+'%</td><td>'+(x.confidence*100).toFixed(1)+'%</td><td><span class="tag">'+x.lift.toFixed(2)+'×</span></td></tr>').join("")+'</table></div><p class="note">Threshold: support ≥12%, confidence ≥35%. Semua nilai diturunkan dari keranjang buatan; evaluasi pada histori transaksi aktual diperlukan.</p></div>'+
+ '<div class="card"><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_bundling\',\'pdf\')">Report PDF</button><button class="btn secondary" onclick="printReport(\'/v1/reports/ai_bundling\')">Cetak</button></div><h2>Frequently Bought Together · Association Rules</h2><div class="tablewrap"><table><tr><th>When customer buys</th><th>Also bought</th><th>Count</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+d.rules.map(x=>'<tr><td><b>'+escapeHtml(x.antecedent_sku)+'</b></td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.co_occurrences+'</td><td>'+(x.support*100).toFixed(1)+'%</td><td>'+(x.confidence*100).toFixed(1)+'%</td><td><span class="tag">'+x.lift.toFixed(2)+'×</span></td></tr>').join("")+'</table></div><p class="note">Threshold: support ≥12%, confidence ≥35%. Semua nilai diturunkan dari keranjang buatan; evaluasi pada histori transaksi aktual diperlukan.</p></div>'+
  '<div class="grid two"><div class="card"><h2>Bagaimana AI-03 bekerja?</h2><p class="sub">Order baskets → frequency counts → association rules → business filters → validasi Sales. Untuk data aktual, batal/retur, promosi dan split temporal harus diproses.</p></div><div class="card"><h2>Research Scope</h2><p class="sub">AI-03 merupakan eksperimen sekunder. Angka lift pada demo tidak dapat diklaim sebagai pola pembelian PT. Liliang.</p></div></div>';
 }
 async function forecast(){
@@ -284,7 +286,7 @@ async function forecast(){
   {sku:"FLV-LEMON-05",name:"Lemon (Synthetic)"}
  ];
  $("view").innerHTML=headline("AI-04 / DEMAND FORECASTING","Sales Demand Intelligence","Forecast ini menggunakan SKU dan transaksi SINTETIS tersendiri, bukan katalog PDF maupun riwayat penjualan PT. Li Liang. Baseline 4-week moving average.")+
- '<div class="card"><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
+ '<div class="card"><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_forecast\',\'pdf\')">Report PDF Forecast (Synthetic)</button><button class="btn secondary" onclick="printReport(\'/v1/reports/ai_forecast\')">Cetak</button></div><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
  await runForecast();
 }
 async function runForecast(){
@@ -447,7 +449,7 @@ async function printReport(path){
 async function reportCenter(){
  const d=await api("/v1/reports/available");
  const cards=d.reports.map(r=>{
-  const p="/v1/reports/"+encodeURIComponent(r.id);
+  const p="/v1/reports/"+encodeURIComponent(r.id)+(r.id==="catalog"||r.id==="audit"?"?limit=2000":"");
   return '<div class="card"><h2>'+escapeHtml(r.title)+'</h2><p class="small">'+escapeHtml(r.id)+'</p><div class="actions">'+
   '<button class="btn" onclick="downloadReport(\''+p+'\',\'pdf\')">Download PDF</button>'+
   '<button class="btn secondary" onclick="downloadReport(\''+p+'\',\'csv\')">Export CSV</button>'+
@@ -470,7 +472,7 @@ async function auditTrail(){
  const [x,old]=await Promise.all([api("/v1/admin/audit-events?limit=200"),api("/v1/admin/catalog/imports")]);
  $("view").innerHTML=headline("ADMIN / FORENSIC AUDIT","Transaction Audit Trace",
  "Jejak permanen tindakan penting. Actor, role, operasi, entity, timestamp dan SHA-256 direkam dalam transaksi database yang sama.")+
- '<div class="card"><div class="toolbar"><h2>Latest '+x.events.length+' Transaction Events</h2><span class="tag">APPEND ONLY</span></div>'+
+ '<div class="card"><div class="toolbar"><h2>Latest '+x.events.length+' Transaction Events</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/audit?limit=2000\',\'pdf\')">Audit PDF</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/audit?limit=2000\',\'csv\')">Audit CSV</button><span class="tag">APPEND ONLY</span></div></div>'+
  '<div class="tablewrap"><table><tr><th>UTC Time</th><th>Actor ID / Role</th><th>Action</th><th>Entity</th><th>Trace ID</th></tr>'+
  x.events.map(y=>'<tr><td>'+escapeHtml(y.at)+'</td><td>#'+escapeHtml(y.actor_id)+' / '+escapeHtml(y.actor_role)+'</td><td><b>'+escapeHtml(y.action)+'</b></td><td>'+escapeHtml(y.entity)+' #'+escapeHtml(y.entity_id)+'</td><td><code>'+escapeHtml(y.id.slice(0,13))+'...</code></td></tr>').join("")+'</table></div>'+
  '<p class="note">Password, inquiry free-text dan isi katalog sengaja tidak disalin ke audit event. Sebagian transaksi lama masih tersimpan dalam tabel audit legacy.</p></div>';
