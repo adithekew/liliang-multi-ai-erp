@@ -94,6 +94,17 @@ class PostgresIntegrationTest(unittest.TestCase):
                                   "decision":"ACCEPT","relevance_label":3,
                                   "rationale":"Expert UAT validation with no company data"})
             self.assertEqual(reviewed.status_code,200,reviewed.text)
+            # UAT Technical validation is operational, NOT an expert research label.
+            scientific=c.get("/v1/research/readiness",headers=headers)
+            self.assertEqual(scientific.status_code,200,scientific.text)
+            self.assertEqual(scientific.json()["candidate_pairs_with_a_review"],0)
+            self.assertEqual(scientific.json()["fully_labelled_runs"],0)
+            self.assertTrue(scientific.json()["uat_records_excluded_from_research"])
+            self.assertEqual(c.get("/v1/ai/system-status",headers=headers).json()["expert_review_count"],0)
+            self.assertEqual(c.get("/v1/ai/system-status",headers=headers).json()["uat_review_count_excluded_from_research"],1)
+            dashboard=c.get("/v1/analytics/summary",headers=headers).json()
+            self.assertEqual(dashboard["expert_review_count"],0)
+            self.assertEqual(dashboard["uat_review_count"],1)
             decision=c.post(f"/v1/inquiries/{iid}/decision",headers=role_headers["manager"],
                             json={"decision":"APPROVE","note":"Technical candidate accepted"})
             self.assertEqual(decision.status_code,200,decision.text)
