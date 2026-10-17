@@ -25,6 +25,8 @@ CATALOG={
  "stock_movements":("Gudang Stock Movement Audit",("admin","gudang","manager")),
  "catalog":("Product Catalog Register",("admin","sales","technical","manager","gudang")),
  "audit":("Transaction Audit Trail",("admin",)),
+ "ai_requirement":("AI-01 Requirement Interpreter Report",("admin","sales","technical","manager")),
+ "ai_hybrid":("AI-02 MiniLM + RRF Fixed Synthetic Lab",("admin","sales","technical","manager")),
  "ai_bundling":("AI-03 Product Bundling - Synthetic Baseline",("admin","sales","manager")),
  "ai_forecast":("AI-04 Demand Forecast - Synthetic Baseline",("admin","sales","manager","gudang")),
  "ai_research":("AI-02 Research Evidence Readiness",("admin","technical","manager"))
@@ -37,6 +39,8 @@ HEADERS={
  "stock_movements":["Time","Actor ID","Product ID","SKU","Previous Qty","Updated Qty"],
  "catalog":["SKU","Product","Type","Applications","Stock","Source","PDF Page","PDF Row"],
  "audit":["UTC Timestamp","Actor ID","Actor Role","Action","Entity","Entity ID","Trace ID"],
+ "ai_requirement":["Inquiry ID","Requirement","Extracted Flavor","Extracted Application","Evidence Status"],
+ "ai_hybrid":["Query ID","Neural Model","Embedding Dimension","Data Source","Scientific Validation"],
  "ai_bundling":["SKU A","SKU B","Basket Count","Support","Confidence","Lift"],
  "ai_forecast":["Week","Historical","Forecast","SKU"],
  "ai_research":["Metric","Value"]
@@ -105,6 +109,23 @@ def report_rows(kind,user,db,limit=500):
         rows=db.execute("""SELECT at,actor_id,actor_role,action,entity,entity_id,id
                            FROM transaction_events ORDER BY at DESC LIMIT ?""",(limit,)).fetchall()
         values=[[r["at"],r["actor_id"],r["actor_role"],r["action"],r["entity"],r["entity_id"],r["id"]] for r in rows]
+    elif kind=="ai_requirement":
+        from multi_ai import interpret
+        sql="SELECT id,requirement FROM inquiries";args=()
+        if role=="sales":sql+=" WHERE created_by=?";args=(user["id"],)
+        data=db.execute(sql+" ORDER BY id DESC LIMIT ?",args+(limit,)).fetchall()
+        values=[]
+        for q in data:
+            analysis=interpret(q["requirement"])
+            values.append([q["id"],q["requirement"],analysis.get("flavor"),analysis.get("application"),
+                           analysis.get("evidence_status")])
+        source="LIVE_INQUIRY_RULE_BASED_NLP_NO_FINE_TUNING"
+    elif kind=="ai_hybrid":
+        from research.hybrid_demo import public_cases
+        evidence=public_cases()
+        values=[[x["id"],evidence.get("model_id"),evidence.get("dimensions"),
+                 "FIXED_SYNTHETIC_QUERIES","NOT_EXPERT_VALIDATED"] for x in evidence.get("cases",[])[:limit]]
+        source="OFFLINE_PRETRAINED_MINILM_384D_RRF_SYNTHETIC_ONLY"
     elif kind=="ai_bundling":
         from multi_ai import bundling_rules
         rules=bundling_rules()
