@@ -226,6 +226,17 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(signed_out.status_code,200,signed_out.text)
             self.assertTrue(signed_out.json()["session_revoked"])
             self.assertEqual(client.get("/v1/auth/me",headers=roles["gudang"]).status_code,401)
+            # Inactivity: server refuses even a cryptographically valid unexpired JWT.
+            reauth=client.post("/v1/auth/login",json={"email":"gudang@test.local",
+                  "password":"demo-test-password-1234"})
+            self.assertEqual(reauth.status_code,200,reauth.text)
+            h={"Authorization":"Bearer "+reauth.json()["access_token"]}
+            from app import connect
+            with connect() as connection:
+                connection.execute("UPDATE user_sessions SET last_seen_at=last_seen_at-901 WHERE user_id=(SELECT id FROM users WHERE email=?)",
+                                   ("gudang@test.local",))
+            self.assertEqual(client.get("/v1/auth/me",headers=h).status_code,401)
+
 
 
 if __name__=="__main__":
