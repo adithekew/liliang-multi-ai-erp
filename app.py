@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Literal
 import jwt
 from argon2 import PasswordHasher
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -258,8 +258,54 @@ from enterprise_ops import mount_enterprise
 mount_enterprise(app,current,get_db,audit,ph)
 from rich_ui import html_page
 
+# Actual server-side page routes; every navigation has its own fresh HTML response.
+# API data remains authoritative in Neon PostgreSQL and is fetched on every load.
+PAGE_ROUTES = {
+    "/":"hub", "/workspace":"hub", "/ai/hybrid":"hybrid",
+    "/ai/evidence":"research", "/ai/status":"systems",
+    "/dashboard":"overview", "/inquiries":"inquiries",
+    "/catalog":"catalog", "/sales/bundling":"bundling",
+    "/inventory/forecast":"forecast", "/admin/users":"users",
+    "/admin/roles":"roles", "/admin/catalog-migration":"migration",
+    "/admin/audit":"audit"
+}
+
+@app.middleware("http")
+async def disable_device_cache(request:Request, call_next):
+    response=await call_next(request)
+    if request.url.path in PAGE_ROUTES or request.url.path.startswith("/v1/"):
+        response.headers["Cache-Control"]="private, no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"]="no-cache"
+        response.headers["Expires"]="0"
+        response.headers["Vary"]="Authorization, Cookie"
+    return response
+
+def page_view(page_name:str):
+    response=HTMLResponse(html_page())
+    response.headers["X-ERP-Page"]=page_name
+    response.headers["X-ERP-Data-Source"]="server"
+    return response
+
 @app.get("/",response_class=HTMLResponse,include_in_schema=False)
-def index():return html_page()
+def index():
+    return page_view("hub")
+
+@app.get("/workspace",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/ai/hybrid",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/ai/evidence",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/ai/status",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/dashboard",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/inquiries",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/catalog",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/sales/bundling",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/inventory/forecast",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/admin/users",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/admin/roles",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/admin/catalog-migration",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/admin/audit",response_class=HTMLResponse,include_in_schema=False)
+def all_pages(request:Request):
+    return page_view(PAGE_ROUTES[request.url.path])
+
 HTML="""<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PT Liliang | ERP Multi-AI</title><style>
 :root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#18324f;background:#f4f7fb}*{box-sizing:border-box}
 header{padding:18px 25px;background:#142d56;color:white;display:flex;align-items:center;justify-content:space-between}header b{font-size:20px}header small{display:block;color:#a7d2ff;margin-top:3px}
