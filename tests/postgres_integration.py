@@ -176,6 +176,22 @@ class PostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(caps_after.status_code,200,caps_after.text)
             self.assertIn("COMPANY_CATALOG_UNVERIFIED",caps_after.json()["data_scope"])
             self.assertIn("supplier-catalog",caps_after.json()["modules"][1]["dataset"])
+            train_gate=c.get("/v1/research/training-readiness",headers=headers)
+            self.assertEqual(train_gate.status_code,200,train_gate.text)
+            self.assertEqual(train_gate.json()["catalog_sku_count"],2)
+            self.assertEqual(train_gate.json()["qualified_expert_labels"],0)
+            self.assertFalse(train_gate.json()["locked_heldout_test"])
+            self.assertFalse(train_gate.json()["model_weight_updates_performed"])
+            self.assertEqual(train_gate.json()["status"],"DATA_COLLECTION_REQUIRED")
+            for uri in ("/workspace","/dashboard","/catalog","/inquiries",
+                        "/ai/evidence","/ai/hybrid","/ai/status",
+                        "/sales/bundling","/inventory/forecast",
+                        "/admin/users","/admin/roles","/admin/catalog-migration","/admin/audit"):
+                route=c.get(uri)
+                self.assertEqual(route.status_code,200,uri)
+                self.assertIn("no-store",route.headers.get("Cache-Control",""))
+            self.assertIn("no-store",summary_after.headers["Cache-Control"])
+
         # Restart idempotence: reset marker prevents seeding five demo SKUs.
         with TestClient(app) as c:
             login=c.post("/v1/auth/login",json={
