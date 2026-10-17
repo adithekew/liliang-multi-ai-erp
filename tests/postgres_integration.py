@@ -66,6 +66,20 @@ class PostgresIntegrationTest(unittest.TestCase):
                     "email":row["email"],"password":row["password_once"]})
                 self.assertEqual(auth.status_code,200,auth.text)
                 role_headers[row["role"]]={"Authorization":"Bearer "+auth.json()["access_token"]}
+            # Technical and Manager inspect the Sales ranking without rerunning AI.
+            technical_view=c.get(f"/v1/inquiries/{iid}/latest-match",headers=role_headers["technical"])
+            self.assertEqual(technical_view.status_code,200,technical_view.text)
+            self.assertEqual(technical_view.json()["run_id"],m.json()["run_id"])
+            self.assertEqual(technical_view.json()["candidates"][0]["sku"],"FLV-MANG-03")
+            manager_view=c.get(f"/v1/inquiries/{iid}/latest-match",headers=role_headers["manager"])
+            self.assertEqual(manager_view.status_code,200,manager_view.text)
+            self.assertEqual(manager_view.json()["run_id"],m.json()["run_id"])
+            sales_denied=c.get(f"/v1/inquiries/{iid}/latest-match",headers=role_headers["sales"])
+            self.assertEqual(sales_denied.status_code,403)
+            self.assertEqual(c.get("/v1/analytics/summary",headers=headers).json()["inquiry_count"],1)
+            with connect() as audit_conn:
+                self.assertEqual(audit_conn.execute("SELECT COUNT(*) AS n FROM runs").fetchone()["n"],1)
+
             again=c.post("/v1/admin/uat/bootstrap",headers=headers,
                          json={"confirmation":"CREATE UAT ROLES"})
             self.assertTrue(all("password_once" not in x for x in again.json()["roles"]))
