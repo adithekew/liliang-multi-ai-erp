@@ -59,7 +59,7 @@ const PAGE_URLS={
  overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
- audit:"/admin/audit"
+ audit:"/admin/audit",reports:"/reports"
 };
 const INITIAL_PAGE=Object.keys(PAGE_URLS).find(k=>PAGE_URLS[k]===window.location.pathname) || "hub";
 let token=sessionStorage.getItem("liliang_token")||"",me=null,page=INITIAL_PAGE,capabilities=[];
@@ -74,16 +74,46 @@ try{
 async function api(path,method="GET",body=null){
  let opt={method,cache:"no-store",credentials:"same-origin",headers:{"Content-Type":"application/json","Cache-Control":"no-store",...(token?{"Authorization":"Bearer "+token}:{})}};
  if(body!==null)opt.body=JSON.stringify(body);
- let res=await fetch(path,opt),json;try{json=await res.json()}catch{throw Error("Server HTTP "+res.status+" did not return JSON. Check service logs and /readyz.");}
+ let res=await fetch(path,opt),json;
+ if(res.status===401 && path!=="/v1/auth/login"){
+   sessionStorage.removeItem("liliang_token");sessionStorage.removeItem("liliang_last_activity");token="";
+   loginScreen("Sesi berakhir. Silakan login ulang.");throw Error("Session expired. Please login again.");
+ }
+ try{json=await res.json()}catch{throw Error("Server HTTP "+res.status+" did not return JSON. Check service logs and /readyz.");}
  if(!res.ok)throw Error(typeof json.detail==="string"?json.detail:JSON.stringify(json.detail||json));
  return json;
 }
 function toast(s,error=false){const t=$("toast");t.textContent=s;t.style.background=error?"#ad3345":"#173858";t.style.display="block";setTimeout(()=>t.style.display="none",3900)}
 function fail(e){toast(e.message||String(e),true)}
-function logout(){sessionStorage.removeItem("liliang_token");token="";me=null;window.location.replace("/")}
-function loginScreen(){
+let lastUserActivity=Number(sessionStorage.getItem("liliang_last_activity"))||Date.now();
+function recordActivity(){
+ const now=Date.now();
+ if(now-lastUserActivity>1000){lastUserActivity=now;sessionStorage.setItem("liliang_last_activity",String(now))}
+}
+for(const e of ["pointerdown","keydown","wheel","touchstart"])
+ document.addEventListener(e,recordActivity,{passive:true});
+function idleLogoutCheck(){if(token&&Date.now()-lastUserActivity>=900000)logout("Tidak ada aktivitas selama 15 menit. Silakan masuk kembali.")}
+setInterval(idleLogoutCheck,15000);
+document.addEventListener("visibilitychange",idleLogoutCheck);
+setInterval(async()=>{
+ // Refresh server-side last activity only while the user has recently interacted.
+ // A truly idle browser never prolongs the session.
+ if(token&&Date.now()-lastUserActivity<120000){
+   try{await api("/v1/auth/me")}catch(_){}
+ }
+},180000);
+
+async function logout(message="Anda telah keluar dari ERP."){
+ const old=token;
+ sessionStorage.removeItem("liliang_token");sessionStorage.removeItem("liliang_last_activity");
+ token="";me=null;
+ if(old)try{await fetch("/v1/auth/logout",{method:"POST",cache:"no-store",headers:{"Authorization":"Bearer "+old}})}catch(_){}
+ loginScreen(message);
+}
+function loginScreen(message=""){
  $("root").innerHTML='<main id="loginwrap"><section class="login"><div class="logo">L</div><div class="eyebrow">RESEARCH PILOT / CLOUD</div><h1>ERP Multi-AI PT. Liliang</h1><p class="sub">Integrated B2B Flavor Workflow & Intelligent Decision Support</p><form id="signin"><label>Email Akun Internal</label><input type="email" name="email" required autocomplete="username" placeholder="admin@liliang.local"><label>Password</label><input type="password" name="password" required autocomplete="current-password"><div class="form-actions"><button class="btn" style="width:100%">Masuk ke ERP →</button></div></form><p class="fine">Research development environment. Jangan masukkan data customer atau informasi rahasia perusahaan.</p><p class="error" id="loginerror"></p></section></main>';
- $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);await enter()}catch(err){$("loginerror").textContent=err.message}};
+ $("loginerror").textContent=message;
+ $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);recordActivity();await enter()}catch(err){$("loginerror").textContent=err.message}};
 }
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
@@ -98,10 +128,12 @@ const menu=[
  ["users","⚙","User Management","ADMIN"],
  ["roles","♙","UAT Role Accounts","ADMIN"],
  ["migration","⇄","Catalog Migration","ADMIN"],
- ["audit","≡","Audit Transactions","ADMIN"]
+ ["audit","≡","Audit Transactions","ADMIN"],
+ ["reports","▤","Report Center & Cetak","REPORTING"]
 ];
 function allowed(key){
  if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
+ if(key==="reports")return true;
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research")return ["admin","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
@@ -114,7 +146,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<a class="navitem '+(page===x[0]?"active":"")+'" href="'+PAGE_URLS[x[0]]+'"><span>'+x[1]+'</span>'+x[2]+'</a>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.7 · audited ERP catalog<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  // Sidebar links now trigger distinct HTTP GET pages (supports deep links & refresh).
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -122,11 +154,11 @@ async function enter(){
  try{me=await api("/v1/auth/me");let x=await api("/v1/ai/capabilities");capabilities=x.modules;page=INITIAL_PAGE;
  if(!allowed(page)){window.location.replace(PAGE_URLS.hub);return}
  frame();await show()}
- catch(e){if(e.message.includes("expired")||e.message.includes("Login"))logout();else{fail(e);loginScreen()}}
+ catch(e){token="";sessionStorage.removeItem("liliang_token");loginScreen("Sesi tidak valid. Silakan login kembali. "+e.message)}
 }
 function navigate(p){if(!allowed(p)||!PAGE_URLS[p])return;window.location.assign(PAGE_URLS[p])}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -165,7 +197,7 @@ async function catalog(){
  const editable=["admin","gudang"].includes(me.role);
  $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
  "1.452 SKU dari PDF PT. Li Liang masih menunggu Technical validation. Stok yang belum dikonfirmasi Gudang ditampilkan UNKNOWN; jangan memasukkan stok simulasi pada katalog perusahaan.")+
- '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div>'+
+ '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'pdf\')">PDF 1.452 SKU</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'csv\')">CSV Semua SKU</button><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div></div>'+
  '<div class="actions"><input id="catalogsearch" style="max-width:320px" value="'+escapeHtml(catalogQuery)+'" placeholder="Cari SKU, nama, pemakaian"><button class="btn" id="catalogfind">Cari</button><button class="btn secondary" id="catalogclear">Reset Filter</button></div>'+
  '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th>'+(editable?'<th>Inventory Action</th>':'')+'</tr>'+
  data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td>'+(editable?'<td><button class="btn secondary" onclick="editStock('+x.id+')">Update Stock</button></td>':'')+'</tr>').join("")+
@@ -198,6 +230,8 @@ async function inquiries(){
    actions.push('<button class="btn secondary" onclick="viewLatestMatch('+x.id+')">View Candidates</button>');
   if(x.status==="TECH_REVIEWED"&&["admin","manager"].includes(me.role))
    actions.push('<button class="btn secondary" onclick="managerApproval('+x.id+')">Approval / Return</button>');
+  if(["admin","sales","technical","manager"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="printReport(\'/v1/reports/inquiry/'+x.id+'\')">Cetak PDF</button>');
   return '<tr><td>#'+x.id+'</td><td>'+escapeHtml(x.customer_ref||"Restricted")+'</td><td>'+escapeHtml(x.requirement||"Restricted")+'</td><td><span class="tag">'+escapeHtml(x.status)+'</span></td><td>'+actions.join(" ")+'</td></tr>';
  }).join("");
  $("view").innerHTML=headline("ERP / SALES TO TECHNICAL","Inquiry & Matching Workflow",
@@ -248,7 +282,7 @@ async function bundling(){
  let d=await api("/v1/ai/bundling");
  $("view").innerHTML=headline("AI-03 / SALES INTELLIGENCE","Product Bundling Insights","Analisis ko-pembelian memakai association rules dari 16 keranjang transaksi sintetis. Tidak ada histori PT. Liliang yang digunakan.")+
  '<div class="grid"><div class="card"><div class="kpi-lbl">Synthetic Baskets</div><div class="kpi">'+d.basket_count+'</div></div><div class="card"><div class="kpi-lbl">Candidate Rules</div><div class="kpi">'+d.rules.length+'</div></div><div class="card"><div class="kpi-lbl">Auto-Sell</div><div class="kpi">OFF</div></div><div class="card"><div class="kpi-lbl">Data Source</div><div class="kpi" style="font-size:20px">DEMO</div></div></div>'+
- '<div class="card"><h2>Frequently Bought Together · Association Rules</h2><div class="tablewrap"><table><tr><th>When customer buys</th><th>Also bought</th><th>Count</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+d.rules.map(x=>'<tr><td><b>'+escapeHtml(x.antecedent_sku)+'</b></td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.co_occurrences+'</td><td>'+(x.support*100).toFixed(1)+'%</td><td>'+(x.confidence*100).toFixed(1)+'%</td><td><span class="tag">'+x.lift.toFixed(2)+'×</span></td></tr>').join("")+'</table></div><p class="note">Threshold: support ≥12%, confidence ≥35%. Semua nilai diturunkan dari keranjang buatan; evaluasi pada histori transaksi aktual diperlukan.</p></div>'+
+ '<div class="card"><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_bundling\',\'pdf\')">Report PDF</button><button class="btn secondary" onclick="printReport(\'/v1/reports/ai_bundling\')">Cetak</button></div><h2>Frequently Bought Together · Association Rules</h2><div class="tablewrap"><table><tr><th>When customer buys</th><th>Also bought</th><th>Count</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+d.rules.map(x=>'<tr><td><b>'+escapeHtml(x.antecedent_sku)+'</b></td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.co_occurrences+'</td><td>'+(x.support*100).toFixed(1)+'%</td><td>'+(x.confidence*100).toFixed(1)+'%</td><td><span class="tag">'+x.lift.toFixed(2)+'×</span></td></tr>').join("")+'</table></div><p class="note">Threshold: support ≥12%, confidence ≥35%. Semua nilai diturunkan dari keranjang buatan; evaluasi pada histori transaksi aktual diperlukan.</p></div>'+
  '<div class="grid two"><div class="card"><h2>Bagaimana AI-03 bekerja?</h2><p class="sub">Order baskets → frequency counts → association rules → business filters → validasi Sales. Untuk data aktual, batal/retur, promosi dan split temporal harus diproses.</p></div><div class="card"><h2>Research Scope</h2><p class="sub">AI-03 merupakan eksperimen sekunder. Angka lift pada demo tidak dapat diklaim sebagai pola pembelian PT. Liliang.</p></div></div>';
 }
 async function forecast(){
@@ -260,7 +294,7 @@ async function forecast(){
   {sku:"FLV-LEMON-05",name:"Lemon (Synthetic)"}
  ];
  $("view").innerHTML=headline("AI-04 / DEMAND FORECASTING","Sales Demand Intelligence","Forecast ini menggunakan SKU dan transaksi SINTETIS tersendiri, bukan katalog PDF maupun riwayat penjualan PT. Li Liang. Baseline 4-week moving average.")+
- '<div class="card"><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
+ '<div class="card"><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_forecast\',\'pdf\')">Report PDF Forecast (Synthetic)</button><button class="btn secondary" onclick="printReport(\'/v1/reports/ai_forecast\')">Cetak</button></div><div class="grid two"><div><label>Forecast SKU</label><select id="sku">'+allowed.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+' — '+escapeHtml(x.name)+'</option>').join("")+'</select></div><div><label>Prediction Horizon</label><select id="horizon"><option value="4">4 minggu</option><option value="8">8 minggu</option></select></div></div><div class="form-actions"><button class="btn" onclick="runForecast()">Jalankan Forecast →</button></div></div><div id="forecastResult"></div>';
  await runForecast();
 }
 async function runForecast(){
@@ -398,11 +432,57 @@ async function migration(){
   }catch(e){fail(e);$("importresult").textContent=e.message;$("importcatalog").disabled=false}
  };
 }
+
+async function downloadReport(path,format="pdf"){
+ try{
+  const res=await fetch(path+(path.includes("?")?"&":"?")+"format="+format,{cache:"no-store",headers:{"Authorization":"Bearer "+token}});
+  if(res.status===401){sessionStorage.removeItem("liliang_token");token="";loginScreen("Sesi habis. Login kembali.");return}
+  if(!res.ok)throw Error("Download gagal: HTTP "+res.status);
+  const blob=await res.blob(),url=URL.createObjectURL(blob);
+  const disp=res.headers.get("content-disposition")||"",match=disp.match(/filename="([^"]+)"/);
+  const a=document.createElement("a");a.href=url;a.download=match?match[1]:"Liliang_Report."+format;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  toast("Laporan "+format.toUpperCase()+" siap diunduh.");
+ }catch(e){fail(e)}
+}
+async function printReport(path){
+ try{
+  // Open synchronously in response to the click, before asynchronous fetch.
+  const w=window.open("about:blank","_blank");
+  if(!w)throw Error("Izinkan popup atau gunakan Download PDF untuk dicetak");
+  const res=await fetch(path+(path.includes("?")?"&":"?")+"format=pdf",{cache:"no-store",headers:{"Authorization":"Bearer "+token}});
+  if(!res.ok){w.close();throw Error("Print gagal: HTTP "+res.status)}
+  const u=URL.createObjectURL(await res.blob());w.location.href=u;
+  setTimeout(()=>URL.revokeObjectURL(u),60000);toast("Dokumen PDF terbuka. Pilih Print dari penampil PDF.");
+ }catch(e){fail(e)}
+}
+async function reportCenter(){
+ const d=await api("/v1/reports/available");
+ const cards=d.reports.map(r=>{
+  const p="/v1/reports/"+encodeURIComponent(r.id)+(r.id==="catalog"||r.id==="audit"?"?limit=2000":"");
+  return '<div class="card"><h2>'+escapeHtml(r.title)+'</h2><p class="small">'+escapeHtml(r.id)+'</p><div class="actions">'+
+  '<button class="btn" onclick="downloadReport(\''+p+'\',\'pdf\')">Download PDF</button>'+
+  '<button class="btn secondary" onclick="downloadReport(\''+p+'\',\'csv\')">Export CSV</button>'+
+  '<button class="btn secondary" onclick="printReport(\''+p+'\')">Cetak</button></div></div>';
+ }).join("");
+ $("view").innerHTML=headline("ERP / REPORTS","Report Center & Cetak Semua Transaksi",
+ "Data dibaca dari Neon setiap permintaan. Akses dibatasi oleh role. PDF dan CSV dibuat oleh server tanpa cache perangkat.")+
+ '<div class="card"><h2>Report Transaksi Inquiry</h2><p class="sub">Laporan per nomor Inquiry memuat customer reference, hasil BM25 Top-5, review Technical, dan keputusan Manager.</p>'+
+ '<div class="actions"><input id="reportInquiry" style="max-width:220px" type="number" min="1" placeholder="Inquiry ID">'+
+ '<button class="btn" id="reportPdf">PDF</button><button class="btn secondary" id="reportCsv">CSV</button>'+
+ '<button class="btn secondary" id="reportPrint">Cetak</button></div></div>'+
+ '<div class="toolbar"><h2>Report per Modul</h2><span class="tag unknown">LIVE DATA / SYNTHETIC AI LABELED</span></div>'+
+ '<div class="grid two">'+cards+'</div><p class="note">Katalog 1.452 SKU: API mendukung limit=2000 untuk cetak seluruh data. Default 500 agar ekspor tidak terlalu berat di Render Free.</p>';
+ const target=()=>{const n=Number($("reportInquiry").value);if(!Number.isInteger(n)||n<1){toast("Isi Inquiry ID yang valid",true);return null}return "/v1/reports/inquiry/"+n};
+ $("reportPdf").onclick=()=>{const t=target();if(t)downloadReport(t,"pdf")};
+ $("reportCsv").onclick=()=>{const t=target();if(t)downloadReport(t,"csv")};
+ $("reportPrint").onclick=()=>{const t=target();if(t)printReport(t)};
+}
 async function auditTrail(){
  const [x,old]=await Promise.all([api("/v1/admin/audit-events?limit=200"),api("/v1/admin/catalog/imports")]);
  $("view").innerHTML=headline("ADMIN / FORENSIC AUDIT","Transaction Audit Trace",
  "Jejak permanen tindakan penting. Actor, role, operasi, entity, timestamp dan SHA-256 direkam dalam transaksi database yang sama.")+
- '<div class="card"><div class="toolbar"><h2>Latest '+x.events.length+' Transaction Events</h2><span class="tag">APPEND ONLY</span></div>'+
+ '<div class="card"><div class="toolbar"><h2>Latest '+x.events.length+' Transaction Events</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/audit?limit=2000\',\'pdf\')">Audit PDF</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/audit?limit=2000\',\'csv\')">Audit CSV</button><span class="tag">APPEND ONLY</span></div></div>'+
  '<div class="tablewrap"><table><tr><th>UTC Time</th><th>Actor ID / Role</th><th>Action</th><th>Entity</th><th>Trace ID</th></tr>'+
  x.events.map(y=>'<tr><td>'+escapeHtml(y.at)+'</td><td>#'+escapeHtml(y.actor_id)+' / '+escapeHtml(y.actor_role)+'</td><td><b>'+escapeHtml(y.action)+'</b></td><td>'+escapeHtml(y.entity)+' #'+escapeHtml(y.entity_id)+'</td><td><code>'+escapeHtml(y.id.slice(0,13))+'...</code></td></tr>').join("")+'</table></div>'+
  '<p class="note">Password, inquiry free-text dan isi katalog sengaja tidak disalin ke audit event. Sebagian transaksi lama masih tersimpan dalam tabel audit legacy.</p></div>';

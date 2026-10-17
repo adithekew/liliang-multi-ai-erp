@@ -1,4 +1,4 @@
-import os, re, time, sqlite3
+import os, re, time, sqlite3, secrets
 from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
@@ -28,6 +28,8 @@ if os.getenv("APP_ENV","pilot")=="production":
 ph=PasswordHasher()
 auth=HTTPBearer(auto_error=False)
 ROLES=("admin","sales","technical","manager","gudang")
+SESSION_IDLE_SECONDS=900  # 15 minutes of no authenticated API activity
+SESSION_ABSOLUTE_SECONDS=8*3600  # hard JWT/session expiry of 8 hours
 DEMO=[
  ("FLV-STRAW-01","Strawberry Flavor","Ripe sweet strawberry for dairy beverages","strawberry","dairy"),
  ("FLV-VANI-02","Vanilla Flavor","Creamy vanilla for bakery and dairy","vanilla","bakery"),
@@ -69,11 +71,25 @@ def current(creds:HTTPAuthorizationCredentials|None=Depends(auth),db:sqlite3.Con
     if not creds:raise HTTPException(401,"Login required")
     try:
         claim=jwt.decode(creds.credentials,SECRET_KEY,algorithms=["HS256"])
-        row=db.execute("SELECT id,email,name,role FROM users WHERE id=?",(int(claim["sub"]),)).fetchone()
-        if not row:raise ValueError()
+        sid=claim["sid"]
+        uid=int(claim["sub"])
+        t=time.time()
+        session=db.execute("""SELECT id,user_id,last_seen_at,expires_at,revoked_at
+                               FROM user_sessions WHERE id=? AND user_id=?""",(sid,uid)).fetchone()
+        if not session or session["revoked_at"] is not None or float(session["expires_at"])<=t:
+            raise ValueError("Session was revoked or expired")
+        if t-float(session["last_seen_at"])>SESSION_IDLE_SECONDS:
+            with db:
+                db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL",(t,sid))
+            raise ValueError("Session inactive")
+        row=db.execute("SELECT id,email,name,role FROM users WHERE id=?",(uid,)).fetchone()
+        if not row:raise ValueError("Account unavailable")
+        # Updating last activity is committed to Neon for cross-device revocation and idle expiry.
+        with db:
+            db.execute("UPDATE user_sessions SET last_seen_at=? WHERE id=? AND revoked_at IS NULL",(t,sid))
         return dict(row)
-    except (jwt.PyJWTError,ValueError,KeyError):
-        raise HTTPException(401,"Invalid or expired token")
+    except (jwt.PyJWTError,ValueError,KeyError,TypeError):
+        raise HTTPException(401,"Session invalid, expired, or inactive. Please log in again.")
 def permit(*roles):
     def dependency(u=Depends(current)):
         if u["role"] not in roles:raise HTTPException(403,"Role access denied")
@@ -117,12 +133,29 @@ def login(data:Login,db=Depends(get_db)):
             valid=False
     if not valid:
         raise HTTPException(401,"Incorrect email or password")
-    token=jwt.encode({"sub":str(u["id"]),"exp":datetime.now(timezone.utc)+timedelta(hours=8)},SECRET_KEY,algorithm="HS256")
+    ts=time.time()
+    sid=secrets.token_urlsafe(32)
+    expires=ts+SESSION_ABSOLUTE_SECONDS
+    token=jwt.encode({"sub":str(u["id"]),"sid":sid,
+                      "exp":datetime.fromtimestamp(expires,timezone.utc)},
+                     SECRET_KEY,algorithm="HS256")
     with db:
-        audit(db,u,"LOGIN_SUCCESS","auth",u["id"],after={"role":u["role"]})
-    return {"access_token":token,"user":{"id":u["id"],"role":u["role"],"name":u["name"]}}
+        db.execute("INSERT INTO user_sessions(id,user_id,created_at,last_seen_at,expires_at,revoked_at) VALUES(?,?,?,?,?,NULL)",
+                   (sid,u["id"],ts,ts,expires))
+        audit(db,u,"LOGIN_SUCCESS","auth",u["id"],after={"role":u["role"],"session_issued":True})
+    return {"access_token":token,"token_type":"bearer","expires_in":SESSION_ABSOLUTE_SECONDS,
+            "idle_timeout_seconds":SESSION_IDLE_SECONDS,
+            "user":{"id":u["id"],"role":u["role"],"name":u["name"]}}
 @app.get("/v1/auth/me")
 def me(u=Depends(current)):return u
+@app.post("/v1/auth/logout")
+def logout(creds:HTTPAuthorizationCredentials|None=Depends(auth),u=Depends(current),db=Depends(get_db)):
+    claim=jwt.decode(creds.credentials,SECRET_KEY,algorithms=["HS256"])
+    with db:
+        db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND user_id=?",
+                   (time.time(),claim["sid"],u["id"]))
+        audit(db,u,"LOGOUT","auth",u["id"],after={"session_revoked":True})
+    return {"logged_out":True,"session_revoked":True}
 @app.post("/v1/users",status_code=201)
 def add_user(data:NewUser,u=Depends(permit("admin")),db=Depends(get_db)):
     try:
@@ -256,6 +289,8 @@ from research.evidence import mount_research
 mount_research(app,current,get_db)
 from enterprise_ops import mount_enterprise
 mount_enterprise(app,current,get_db,audit,ph)
+from reports import mount_reports
+mount_reports(app,current,get_db)
 from rich_ui import html_page
 
 # Actual server-side page routes; every navigation has its own fresh HTML response.
@@ -267,7 +302,7 @@ PAGE_ROUTES = {
     "/catalog":"catalog", "/sales/bundling":"bundling",
     "/inventory/forecast":"forecast", "/admin/users":"users",
     "/admin/roles":"roles", "/admin/catalog-migration":"migration",
-    "/admin/audit":"audit"
+    "/admin/audit":"audit", "/reports":"reports"
 }
 
 @app.middleware("http")
@@ -303,6 +338,7 @@ def index():
 @app.get("/admin/roles",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/admin/catalog-migration",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/admin/audit",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/reports",response_class=HTMLResponse,include_in_schema=False)
 def all_pages(request:Request):
     return page_view(PAGE_ROUTES[request.url.path])
 

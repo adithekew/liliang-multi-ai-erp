@@ -111,6 +111,19 @@ class PostgresIntegrationTest(unittest.TestCase):
             inventory=c.patch(f'/v1/products/{chosen["product_id"]}/stock',
                               headers=role_headers["gudang"],json={"stock_qty":10})
             self.assertEqual(inventory.status_code,200,inventory.text)
+            # Server creates downloadable PDF and CSV reports for real persisted PostgreSQL transactions.
+            for k in ("inquiries","matching","technical_reviews","manager_decisions",
+                      "stock_movements","catalog","audit","ai_requirement","ai_hybrid","ai_bundling","ai_forecast","ai_research"):
+                pdf=c.get("/v1/reports/"+k+"?format=pdf",headers=headers)
+                self.assertEqual(pdf.status_code,200,k+": "+str(pdf.status_code))
+                self.assertTrue(pdf.content.startswith(b"%PDF"),k)
+                self.assertIn("no-store",pdf.headers["Cache-Control"])
+            receipt=c.get(f"/v1/reports/inquiry/{iid}?format=pdf",headers=role_headers["manager"])
+            self.assertEqual(receipt.status_code,200,receipt.text[:200] if receipt.status_code!=200 else "")
+            self.assertTrue(receipt.content.startswith(b"%PDF"))
+            self.assertEqual(c.get("/v1/reports/audit",headers=role_headers["sales"]).status_code,403)
+            self.assertEqual(c.get(f"/v1/reports/inquiry/{iid}",headers=role_headers["gudang"]).status_code,403)
+
             events=c.get("/v1/admin/audit-events",headers=headers)
             self.assertEqual(events.status_code,200,events.text)
             actions={e["action"] for e in events.json()["events"]}
@@ -176,6 +189,12 @@ class PostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(caps_after.status_code,200,caps_after.text)
             self.assertIn("COMPANY_CATALOG_UNVERIFIED",caps_after.json()["data_scope"])
             self.assertIn("supplier-catalog",caps_after.json()["modules"][1]["dataset"])
+            sessions=c.get("/v1/auth/me",headers=role_headers["gudang"])
+            self.assertEqual(sessions.status_code,200)
+            end_session=c.post("/v1/auth/logout",headers=role_headers["gudang"])
+            self.assertEqual(end_session.status_code,200,end_session.text)
+            self.assertEqual(c.get("/v1/auth/me",headers=role_headers["gudang"]).status_code,401)
+
             train_gate=c.get("/v1/research/training-readiness",headers=headers)
             self.assertEqual(train_gate.status_code,200,train_gate.text)
             self.assertEqual(train_gate.json()["catalog_sku_count"],2)
