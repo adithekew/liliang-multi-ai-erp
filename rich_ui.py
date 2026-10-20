@@ -2,7 +2,7 @@
 def html_page():
     return r"""<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PT Liliang | ERP Multi-AI Research Pilot</title>
+<title>PT. Liliang International | ERP Multi-AI</title><link rel="icon" type="image/jpeg" href="/branding/logo?v=20261020">
 <style>
 :root{--navy:#102546;--navy2:#1b3b63;--blue:#2864df;--mint:#12bca4;--text:#17304f;--muted:#75859b;--bg:#f4f7fc;--border:#e4ebf5;--red:#ba394d;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text);background:var(--bg)}
 *{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,textarea,select{font:inherit}button{cursor:pointer}
@@ -49,6 +49,15 @@ input:focus,textarea:focus,select:focus{border-color:#4189df;box-shadow:0 0 0 3p
 .research-models .tag{white-space:normal;overflow-wrap:anywhere;max-width:100%}
 @media(max-width:1000px){.research-models{font-size:11px}.research-models th,.research-models td{padding:8px}}
 @media(max-width:620px){.research-models{min-width:650px}}
+
+/* Official LiLiang International logo: shared on every page */
+.official-login-logo{display:block;width:min(310px,100%);height:auto;aspect-ratio:2048/550;object-fit:contain;background:#000;border-radius:8px;margin:0 0 18px}
+.official-sidebar-logo{display:block;width:100%;height:auto;aspect-ratio:2048/550;object-fit:contain;background:#000;border-radius:8px}
+.brand.official-brand{display:block;padding:8px 7px 20px}
+.official-brand-caption{font-size:11px;letter-spacing:.08em;color:#abc8e6;margin-top:8px}
+.topbar-official{display:flex;align-items:center;gap:12px;min-width:0}
+.official-topbar-logo{display:block;width:116px;height:auto;aspect-ratio:2048/550;object-fit:contain;background:#000;border-radius:5px;flex-shrink:0}
+@media(max-width:850px){.official-topbar-logo{width:80px}.topbar-official .fine{display:none}}
 </style></head><body><div id="root"></div><div id="toast"></div><script>
 const $=id=>document.getElementById(id);
 const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -111,7 +120,7 @@ async function logout(message="Anda telah keluar dari ERP."){
  loginScreen(message);
 }
 function loginScreen(message=""){
- $("root").innerHTML='<main id="loginwrap"><section class="login"><div class="logo">L</div><div class="eyebrow">RESEARCH PILOT / CLOUD</div><h1>ERP Multi-AI PT. Liliang</h1><p class="sub">Integrated B2B Flavor Workflow & Intelligent Decision Support</p><form id="signin"><label>Email Akun Internal</label><input type="email" name="email" required autocomplete="username" placeholder="admin@liliang.local"><label>Password</label><input type="password" name="password" required autocomplete="current-password"><div class="form-actions"><button class="btn" style="width:100%">Masuk ke ERP →</button></div></form><p class="fine">Research development environment. Jangan masukkan data customer atau informasi rahasia perusahaan.</p><p class="error" id="loginerror"></p></section></main>';
+ $("root").innerHTML='<main id="loginwrap"><section class="login"><img class="official-login-logo" src="/branding/logo?v=20261020" alt="Logo resmi PT. Liliang International"><div class="eyebrow">RESEARCH PILOT / CLOUD</div><h1>ERP Multi-AI PT. Liliang</h1><p class="sub">Integrated B2B Flavor Workflow & Intelligent Decision Support</p><form id="signin"><label>Email Akun Internal</label><input type="email" name="email" required autocomplete="username" placeholder="admin@liliang.local"><label>Password</label><input type="password" name="password" required autocomplete="current-password"><div class="form-actions"><button class="btn" style="width:100%">Masuk ke ERP →</button></div></form><p class="fine">Research development environment. Jangan masukkan data customer atau informasi rahasia perusahaan.</p><p class="error" id="loginerror"></p></section></main>';
  $("loginerror").textContent=message;
  $("signin").onsubmit=async e=>{e.preventDefault();try{let obj=Object.fromEntries(new FormData(e.target)),a=await api("/v1/auth/login","POST",obj);token=a.access_token;sessionStorage.setItem("liliang_token",token);recordActivity();await enter()}catch(err){$("loginerror").textContent=err.message}};
 }
@@ -146,7 +155,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<a class="navitem '+(page===x[0]?"active":"")+'" href="'+PAGE_URLS[x[0]]+'"><span>'+x[1]+'</span>'+x[2]+'</a>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand"><div class="logo">L</div><div><strong>PT LILIANG</strong><small>ERP · MULTI-AI</small></div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand official-brand"><img class="official-sidebar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div class="official-brand-caption">ERP · MULTI-AI</div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div class="topbar-official"><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><img class="official-topbar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  // Sidebar links now trigger distinct HTTP GET pages (supports deep links & refresh).
 }
 function toggleMenu(){$("side").classList.toggle("open")}
