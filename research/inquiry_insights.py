@@ -16,9 +16,15 @@ def candidate_insight(candidate, requirement):
     known_flavors=set(expected["flavors"])
     matched=sorted(known_flavors & title)
     if known_flavors:
-        flavor_state="NAME_MATCH" if matched else "MISMATCH"
-        flavor_note=("Nama katalog mengandung rasa "+_word(matched)+"."
-            if matched else "Nama produk tidak memuat rasa utama yang diminta ("+_word(sorted(known_flavors))+").")
+        if set(matched)==known_flavors:
+            flavor_state="NAME_MATCH"
+            flavor_note="Nama katalog memuat seluruh rasa yang diminta: "+_word(matched)+"."
+        elif matched:
+            flavor_state="PARTIAL_MATCH"
+            flavor_note="Hanya sebagian rasa terdeteksi ("+_word(matched)+"); rasa lainnya perlu diklarifikasi: "+_word(sorted(known_flavors-set(matched)))+"."
+        else:
+            flavor_state="MISMATCH"
+            flavor_note="Nama produk tidak memuat rasa utama yang diminta ("+_word(sorted(known_flavors))+")."
     else:
         flavor_state="UNKNOWN"
         flavor_note="Rasa utama tidak dapat diekstrak dengan pasti dari inquiry."
@@ -50,6 +56,7 @@ def candidate_insight(candidate, requirement):
         app_state="NOT_REQUESTED";app_note="Aplikasi belum ditentukan oleh Sales/customer."
     blockers=[]
     if flavor_state=="MISMATCH":blockers.append("Rasa utama tidak sesuai")
+    if flavor_state=="PARTIAL_MATCH":blockers.append("Sebagian rasa yang diminta belum ditemukan pada nama produk")
     if form_state=="MISMATCH":blockers.append("Bentuk produk tidak sesuai")
     if actual_apps=={"vape"} and "vape" not in wanted_apps:
         blockers.append("Produk memiliki indikasi penggunaan non-pangan")
@@ -73,6 +80,7 @@ def candidate_insight(candidate, requirement):
     if p.get("expert_decision"):
         # Keep human review provenance, not as a model accuracy signal.
         note+=" Catatan terpisah: reviewer Technical mencatat "+str(p["expert_decision"])+"."
+        if p.get("expert_note"):note+=" Alasan reviewer: "+str(p["expert_note"])
     return {
         "product_id":p.get("product_id",p.get("id")),
         "sku":p.get("sku"),
@@ -83,6 +91,7 @@ def candidate_insight(candidate, requirement):
         "catalog_source":p.get("source_ref") or "UNKNOWN",
         "evidence_classification":"CATALOG_TEXT_UNVERIFIED",
         "technical_decision":p.get("expert_decision"),
+        "technical_note":p.get("expert_note"),
         "relevance_label":p.get("expert_relevance")
     }
 
