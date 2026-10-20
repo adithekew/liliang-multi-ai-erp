@@ -18,7 +18,7 @@ class PilotFlow(unittest.TestCase):
             brand=client.get("/branding/logo?v=20261020")
             self.assertEqual(brand.status_code,200,brand.text[:100] if brand.status_code!=200 else "")
             self.assertEqual(brand.headers["content-type"],"image/jpeg")
-            self.assertTrue(brand.content.startswith(b"\\xff\\xd8".decode("unicode_escape").encode("latin1")))
+            self.assertTrue(brand.content.startswith(bytes((0xFF,0xD8))))
             self.assertGreater(len(brand.content),2500)
             for route in ("/","/workspace","/dashboard","/catalog",
                           "/inquiries","/ai/hybrid","/ai/evidence",
