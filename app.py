@@ -6,7 +6,7 @@ from typing import Literal
 import jwt
 from argon2 import PasswordHasher
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
@@ -311,6 +311,14 @@ from enterprise_ops import mount_enterprise
 mount_enterprise(app,current,get_db,audit,ph)
 from reports import mount_reports
 mount_reports(app,current,get_db)
+@app.get("/branding/logo",include_in_schema=False)
+def official_brand_logo():
+    """Serve permanent corporate branding asset included in this deployment."""
+    logo_path=Path(__file__).resolve().parent/"static"/"branding"/"liliang-official.jpg"
+    return FileResponse(logo_path,media_type="image/jpeg",
+        headers={"Cache-Control":"public, max-age=3600, must-revalidate",
+                 "X-Content-Type-Options":"nosniff"})
+
 from rich_ui import html_page
 
 # Actual server-side page routes; every navigation has its own fresh HTML response.
