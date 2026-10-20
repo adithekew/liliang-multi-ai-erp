@@ -204,8 +204,10 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
     if u["role"]=="sales" and q["created_by"]!=u["id"]:raise HTTPException(403,"Not your inquiry")
     if q["status"]!="NEW":
         raise HTTPException(409,"This inquiry was already processed. Open saved candidates; do not rerun matching.")
+    from research.inquiry_insights import inquiry_insight
     t=time.monotonic()
-    candidates=score_products(q["requirement"],db.execute("SELECT * FROM products").fetchall())
+    product_catalog=[dict(p) for p in db.execute("SELECT * FROM products").fetchall()]
+    candidates=score_products(q["requirement"],product_catalog)
     elapsed=int((time.monotonic()-t)*1000)
     new_status="MATCHED" if candidates else "NO_MATCH"
     with db:
@@ -221,23 +223,31 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
         audit(db,u,"MATCH_BASELINE","run",run.lastrowid,
               after={"method":"BM25_CONSTRAINT_AWARE","candidate_count":len(candidates),"latency_ms":elapsed,
                      "abstained":not bool(candidates)})
+    catalog_by_id={p["id"]:p for p in product_catalog}
+    enriched=[{**catalog_by_id.get(c["product_id"],{}),**c} for c in candidates]
     return {"run_id":run.lastrowid,"method":"bm25-catalog-constraint-v0.3","latency_ms":elapsed,
             "status":new_status,"abstained":not bool(candidates),
-            "candidates":candidates,"notice":"No candidate is returned when required flavor/form evidence is missing. Scores are uncalibrated BM25, NOT accuracy or suitability probabilities. Technical must validate every candidate."}
+            "candidates":candidates,
+            "insight":inquiry_insight(q["requirement"],enriched,"bm25-catalog-constraint-v0.3",new_status),
+            "notice":"No candidate is returned when required flavor/form evidence is missing. Scores are uncalibrated BM25, NOT accuracy or suitability probabilities. Technical must validate every candidate."}
 @app.get("/v1/inquiries/{iid}/latest-match")
 def latest_match(iid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
-    q=db.execute("SELECT id,created_by,status FROM inquiries WHERE id=?",(iid,)).fetchone()
+    from research.inquiry_insights import inquiry_insight
+    q=db.execute("SELECT id,created_by,status,requirement FROM inquiries WHERE id=?",(iid,)).fetchone()
     if not q:raise HTTPException(404,"Inquiry not found")
     if u["role"]=="sales" and q["created_by"]!=u["id"]:
         raise HTTPException(403,"Not your inquiry")
     run=db.execute("SELECT id,method,latency_ms,created_at FROM runs WHERE inquiry_id=? ORDER BY id DESC LIMIT 1",(iid,)).fetchone()
-    if not run:return {"inquiry_id":iid,"status":q["status"],"run_id":None,"candidates":[]}
-    rows=db.execute("""SELECT c.rank,p.id product_id,p.sku,p.name,c.score,c.unknown,
+    if not run:return {"inquiry_id":iid,"status":q["status"],"run_id":None,"candidates":[],
+                        "insight":inquiry_insight(q["requirement"],[],"NOT_RUN",q["status"])}
+    rows=db.execute("""SELECT c.rank,p.id product_id,p.sku,p.name,p.description,p.application,p.profile,p.source_ref,c.score,c.unknown,
        (SELECT v.decision FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_decision,
        (SELECT v.label FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_relevance
        FROM candidates c JOIN products p ON p.id=c.product_id WHERE c.run_id=? ORDER BY c.rank""",(run["id"],)).fetchall()
+    candidates=[dict(r) for r in rows]
     return {"inquiry_id":iid,"status":q["status"],"run_id":run["id"],"method":run["method"],
-            "latency_ms":run["latency_ms"],"candidates":[dict(r) for r in rows],
+            "latency_ms":run["latency_ms"],"candidates":candidates,
+            "insight":inquiry_insight(q["requirement"],candidates,run["method"],q["status"]),
             "notice":"Candidates require Technical evaluation. The BM25 score is not an accuracy percentage."}
 
 @app.get("/v1/matches/{rid}")
