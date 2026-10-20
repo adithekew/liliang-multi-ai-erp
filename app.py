@@ -242,7 +242,8 @@ def latest_match(iid:int,u=Depends(permit("admin","sales","technical","manager")
                         "insight":inquiry_insight(q["requirement"],[],"NOT_RUN",q["status"])}
     rows=db.execute("""SELECT c.rank,p.id product_id,p.sku,p.name,p.description,p.application,p.profile,p.source_ref,c.score,c.unknown,
        (SELECT v.decision FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_decision,
-       (SELECT v.label FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_relevance
+       (SELECT v.label FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_relevance,
+       (SELECT v.note FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_note
        FROM candidates c JOIN products p ON p.id=c.product_id WHERE c.run_id=? ORDER BY c.rank""",(run["id"],)).fetchall()
     candidates=[dict(r) for r in rows]
     return {"inquiry_id":iid,"status":q["status"],"run_id":run["id"],"method":run["method"],
