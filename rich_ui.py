@@ -246,6 +246,10 @@ async function inquiries(){
 function displayCandidates(d){
  const run=d.run_id||null;
  if(!run){$("workflowResult").innerHTML='<div class="card"><p class="empty">Belum ada matching untuk inquiry ini.</p></div>';return}
+ if(!d.candidates||!d.candidates.length){
+   $("workflowResult").innerHTML='<div class="card"><h2>NO MATCH — Perlu Klarifikasi</h2><p class="error">Sistem tidak menemukan SKU yang memenuhi rasa atau bentuk produk yang diminta. Tidak ada substitusi otomatis.</p><p class="note">Periksa ejaan, tipe produk dan spesifikasi; buat inquiry baru setelah kebutuhan diperjelas. Tidak ada keputusan Technical/Manager tanpa kandidat yang dapat diverifikasi.</p></div>';
+   return;
+ }
  $("workflowResult").innerHTML='<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
  d.candidates.map(x=>{
   const label=x.expert_decision?escapeHtml(x.expert_decision)+" / relevance "+escapeHtml(x.expert_relevance):"PENDING";
@@ -257,8 +261,14 @@ function displayCandidates(d){
 async function matchInquiry(id){
  try{
   const d=await api("/v1/inquiries/"+id+"/match","POST");
+  await inquiries();
   displayCandidates(d);
- }catch(e){fail(e)}
+ }catch(e){
+  if(String(e.message||"").includes("409")||/already (matched|processed)/i.test(String(e.message||""))){
+    await inquiries();await viewLatestMatch(id);return;
+  }
+  fail(e);
+ }
 }
 async function viewLatestMatch(id){
  try{
@@ -335,6 +345,8 @@ async function runHybridDemo(){
 async function aiSystemStatus(){
  const [status,ready]=await Promise.all([api("/v1/ai/system-status"),api("/readyz")]);
  const record=(label,val)=>'<div class="card"><div class="kpi-lbl">'+escapeHtml(label)+'</div><div class="kpi" style="font-size:17px">'+escapeHtml(val)+'</div></div>';
+ const qc=["admin","technical","manager"].includes(me.role)
+  ?await api("/v1/ai/catalog-smoke").catch(()=>null):null;
  const services=status.components.map(x=>'<tr><td><b>'+escapeHtml(x.id)+'</b></td><td>'+escapeHtml(x.method)+'</td><td><span class="tag '+(x.mode.includes("ONLINE")?"":"unknown")+'">'+escapeHtml(x.mode)+'</span></td><td>'+escapeHtml(x.data)+'</td></tr>').join("");
  $("view").innerHTML=headline("SYSTEM OBSERVABILITY / LIVE DATA","AI & Cloud System Status",
  "Status aktual dihitung oleh backend. Ini inventory kemampuan, BUKAN pengukuran akurasi.")+
@@ -343,6 +355,7 @@ async function aiSystemStatus(){
  record("Expert Reviews",status.expert_review_count)+'</div>'+
  '<div class="card"><div class="toolbar"><h2>Component Execution Modes</h2><span class="tag unknown">NO VALIDATED COMPANY MODEL</span></div><div class="tablewrap"><table><thead><tr><th>Module</th><th>Implemented Method</th><th>Runtime Mode</th><th>Data Scope</th></tr></thead><tbody>'+services+'</tbody></table></div>'+
  '<p class="note">Database health: '+escapeHtml(ready.ready?"READY":"NOT READY")+' · product records: '+status.product_count+' · inquiry records: '+status.inquiry_count+'. No passwords, connection strings or customer requirements are exposed.</p></div>'+
+ (qc?'<div class="card"><h2>Live Catalog Quality Smoke (NOT Scientific Accuracy)</h2><p class="sub">Pemeriksaan kesesuaian nama rasa/bentuk pada katalog aktif: '+qc.constraints_passed+' / '+qc.constraints_total+' kasus developer-defined. Hasil ini bukan Precision@5, bukan bukti pakar dan tidak menunjukkan kelayakan formulasi.</p><div class="tablewrap"><table><tr><th>Test Case</th><th>Expected Flavor</th><th>Top Candidate</th><th>Constraint</th></tr>'+qc.scenarios.map(x=>'<tr><td>'+escapeHtml(x.case)+'</td><td>'+escapeHtml(x.requirement)+'</td><td>'+escapeHtml(x.top_name||"NO MATCH")+'</td><td>'+escapeHtml(x.constraint_consistency)+'</td></tr>').join("")+'</table></div></div>':'')+
  '<div class="grid two"><div class="card"><h2>AI-02 Research Workflow</h2><p class="sub">Pretrained neural vectors: GitHub Actions offline → versioned synthetic fixtures → cosine dense ranking → RRF hybrid fusion. FastAPI receives new arbitrary inquiries but currently ranks them with BM25 only.</p><button class="btn" onclick="navigate(\'hybrid\')">Test Precomputed Neural Demo</button></div><div class="card"><h2>Still Pending Before Research/Production</h2>'+status.limitations.map(s=>'<p class="small">• '+escapeHtml(s)+'</p>').join("")+'<button class="btn secondary" onclick="navigate(\'research\')">Review Scientific Readiness</button></div></div>';
 }
 async function researchEvidence(){

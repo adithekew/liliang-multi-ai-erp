@@ -22,72 +22,40 @@ ALIASES = {
 }
 FLAVORS={"strawberry","vanilla","mango","chocolate","lemon"}
 APPLICATIONS={"dairy","beverage","bakery"}
-MODEL_VERSION="bm25-expert-review-demo-v0.2"
+MODEL_VERSION="bm25-catalog-constraint-v0.3"
 
 def tokens(text):
-    return [ALIASES.get(t,t) for t in re.findall(r"[a-z0-9]+",str(text).lower())]
+    from research.catalog_matcher import normalized_tokens
+    return normalized_tokens(text)
 
 def interpret(text):
-    ts=tokens(text)
-    found_flavor=sorted(set(ts)&FLAVORS)
-    found_app=sorted(set(ts)&APPLICATIONS)
+    from research.catalog_matcher import query_intent
+    intent=query_intent(text)
+    f=intent["flavors"][0] if intent["flavors"] else None
+    a=intent["applications"][0] if intent["applications"] else None
+    form=intent["forms"][0] if intent["forms"] else None
     return {
-        "flavor":found_flavor[0] if found_flavor else None,
-        "application":found_app[0] if found_app else None,
-        "attributes":{"flavor":{"value":found_flavor[0] if found_flavor else None,
-                                 "status":"EXTRACTED_UNVERIFIED" if found_flavor else "UNKNOWN"},
-                      "application":{"value":found_app[0] if found_app else None,
-                                     "status":"EXTRACTED_UNVERIFIED" if found_app else "UNKNOWN"},
-                      "regulatory":{"value":None,"status":"UNKNOWN"},
-                      "halal_status":{"value":None,"status":"UNKNOWN"}},
+        "flavor":f,
+        "application":a,
+        "form":form,
+        "identified_flavors":intent["flavors"],
+        "identified_applications":intent["applications"],
+        "attributes":{
+            "flavor":{"value":f,"status":"EXTRACTED_UNVERIFIED" if f else "UNKNOWN"},
+            "application":{"value":a,"status":"EXTRACTED_UNVERIFIED" if a else "UNKNOWN"},
+            "product_form":{"value":form,"status":"EXTRACTED_UNVERIFIED" if form else "UNKNOWN"},
+            "regulatory":{"value":None,"status":"UNKNOWN"},
+            "halal_status":{"value":None,"status":"UNKNOWN"}
+        },
         "raw_text":text,
-        "method":"rule-based bilingual NLP baseline",
-        "evidence_status":"No verified product datasheets or expert labels attached",
-        "data_classification":"SYNTHETIC_PILOT"
+        "method":"Rule-based bilingual entity normalizer with typo correction; not trained ML",
+        "evidence_status":"No independently verified datasheet evidence or expert labels",
+        "data_classification":"USER_PROVIDED_UNVERIFIED"
     }
 
-def score_products(query, products):
-    """BM25 lexical retrieval. NOT hybrid semantic neural retrieval."""
-    q=tokens(query)
-    docs=[]
-    for item in products:
-        p=dict(item)
-        docs.append((p,tokens(" ".join(str(p.get(k,"")) for k in ("sku","name","description","profile","application")))))
-    n=len(docs)
-    if not n: return []
-    frequencies=Counter(token for _,doc in docs for token in set(doc))
-    avgdl=sum(len(doc) for _,doc in docs)/n or 1
-    qtokens=Counter(q)
-    parsed=interpret(query)
-    candidates=[]
-    for p,doc in docs:
-        freq=Counter(doc)
-        raw=0.0
-        for word,query_count in qtokens.items():
-            f=freq[word]
-            if f<=0: continue
-            idf=log(1+(n-frequencies[word]+.5)/(frequencies[word]+.5))
-            raw+=idf * f*2.2/(f+1.2*(.25+.75*len(doc)/avgdl)) * min(query_count,2)
-        if parsed["flavor"] and parsed["flavor"]==p.get("profile"):
-            raw+=1.0
-        if parsed["application"] and parsed["application"]==p.get("application"):
-            raw+=.4
-        candidates.append({
-            "product_id":p["id"],"sku":p["sku"],"name":p["name"],
-            "score":round(raw,4),"source_ref":p.get("source_ref","DEMO-ONLY"),
-            "unknown_attributes":["regulatory","halal_status"],
-            "evidence_verified":False,"profile":p.get("profile"),
-            "application":p.get("application"),
-            "explanation":{
-                "matched_terms":sorted(set(q)&set(doc))[:12],
-                "flavor_tag_match":bool(parsed["flavor"] and parsed["flavor"]==p.get("profile")),
-                "application_tag_match":bool(parsed["application"] and parsed["application"]==p.get("application")),
-                "limitations":"Lexical/domain-tag evidence only; no verified datasheet or suitability assessment."
-            }
-        })
-    candidates.sort(key=lambda x:(-x["score"],x["sku"]))
-    for rank,c in enumerate(candidates[:5],1):c["rank"]=rank
-    return candidates[:5]
+def score_products(query,products):
+    from research.catalog_matcher import score_products as rank_catalog
+    return rank_catalog(query,products)
 
 # Synthetic historical order baskets. No company sales or customer data.
 BASKETS=[
@@ -200,7 +168,7 @@ def mount_ai(app,current,get_db):
             "company_catalog_products":company_products,
             "components":[
                 {"id":"AI-01","method":"Bilingual normalization and deterministic requirement extraction","mode":"ONLINE_RULE_BASED","data":"User-entered inquiry","trained_ml_model":False},
-                {"id":"AI-02","method":"BM25 lexical Top-5 with evidence explanations","mode":"ONLINE_BM25_ONLY","data":"Catalog PDF (unverified)" if company_products else "Synthetic pilot products","trained_ml_model":False},
+                {"id":"AI-02","method":"Flavor-gated multilingual BM25 Top-5 with typo normalization, form and application evidence","mode":"ONLINE_CONSTRAINT_AWARE_BM25","data":"Catalog PDF (unverified)" if company_products else "Synthetic pilot products","trained_ml_model":False},
                 {"id":"AI-02-NEURAL","method":fixture.get("model_id") if fixture.get("available") else "Neural fixture unavailable","mode":"OFFLINE_PRECOMPUTED_FIXED_SYNTHETIC_CASES" if fixture.get("available") else "NEURAL_ASSET_UNAVAILABLE",
                  "data":str(len(fixture.get("cases",[])))+" developer-authored example inquiries",
                  "trained_ml_model":bool(fixture.get("available")),
@@ -209,12 +177,49 @@ def mount_ai(app,current,get_db):
                 {"id":"AI-04","method":"4-week moving average and rolling backtest","mode":"ONLINE_FORECAST_BASELINE_SYNTHETIC_DEMO","data":"24 synthetic SKU-week points per item","trained_ml_model":False}
             ],
             "limitations":[
-                "No online neural encoder for arbitrary free-text inquiries.",
+                "No online neural encoder for arbitrary free-text inquiries; current production matcher is rule-constrained lexical retrieval.",
                 "Pretrained neural vectors exist only for the versioned fixed synthetic benchmark.",
                 "No company-trained or expert-validated models; relevance scores are not accuracy percentages.",
                 "No verified halal, regulatory, datasheet, or real sales history source.",
                 "No LLM or autonomous business decisions."
             ]
+        }
+
+    @app.get("/v1/ai/catalog-smoke")
+    def catalog_smoke(u=Depends(current),db=Depends(get_db)):
+        """Read-only domain constraints check on current catalog. NOT an accuracy score."""
+        if u["role"] not in ("admin","technical","manager"):
+            raise HTTPException(403,"Role access denied")
+        from research.catalog_matcher import normalized_tokens
+        prompts=[
+            ("strawberry_typo","Butuh Rasa Susu Strowbery","strawberry",None),
+            ("strawberry_dairy","strawberry flavor untuk minuman susu dairy","strawberry",None),
+            ("lemon_powder","rasa lemon serbuk untuk produksi roti","lemon","powder"),
+            ("mango_drink","butuh rasa mangga minuman","mango",None),
+            ("coconut_drink","rasa kelapa untuk minuman","coconut",None)
+        ]
+        catalog=db.execute("SELECT * FROM products ORDER BY sku").fetchall()
+        results=[]
+        for key,q,flavor,required_form in prompts:
+            candidates=score_products(q,catalog)
+            candidates_ok=bool(candidates) and all(
+                flavor in normalized_tokens(c["name"])
+                and (not required_form or required_form in normalized_tokens(c["name"]))
+                for c in candidates)
+            results.append({"case":key,"query":q,
+              "constraint_consistency":"PASS" if candidates_ok else "FAIL",
+              "top_sku":candidates[0]["sku"] if candidates else None,
+              "top_name":candidates[0]["name"] if candidates else None,
+              "candidate_count":len(candidates),"requirement":flavor,
+              "expected_form":required_form})
+        passed=sum(x["constraint_consistency"]=="PASS" for x in results)
+        return {
+          "method":"CATALOG_CONSTRAINT_SMOKE_NOT_EXPERT_ACCURACY",
+          "product_count":len(catalog),"scenarios":results,
+          "constraints_passed":passed,"constraints_total":len(results),
+          "scientific_precision":None,"expert_validated":False,
+          "training_performed":False,
+          "warning":"These checks verify named flavor/form consistency only. They are not precision, Recall@5, or customer suitability labels."
         }
 
     @app.get("/v1/ai/hybrid-cases")
