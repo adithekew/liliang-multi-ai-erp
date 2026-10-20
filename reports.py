@@ -16,6 +16,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, LongTable, TableStyle, KeepTogether
+from pathlib import Path
 
 CATALOG={
  "inquiries":("Inquiry Register",("admin","sales","technical","manager")),
@@ -159,9 +160,10 @@ def _safe_paragraph(v,style):
     return Paragraph(escape(scalar(v)).replace("\n","<br/>"),style)
 
 def render_pdf(report):
+    logo=Path(__file__).resolve().parent/'static'/'branding'/'liliang-official.jpg'
     buffer=io.BytesIO()
     doc=SimpleDocTemplate(buffer,pagesize=landscape(A4),rightMargin=14*mm,leftMargin=14*mm,
-                          topMargin=16*mm,bottomMargin=16*mm,title=report["title"],
+                          topMargin=22*mm,bottomMargin=16*mm,title=report["title"],
                           author="PT. Li Liang ERP Multi-AI Research Pilot")
     styles=getSampleStyleSheet()
     title_style=ParagraphStyle("ReportTitle",parent=styles["Heading1"],fontName="Helvetica-Bold",
@@ -190,6 +192,8 @@ def render_pdf(report):
     story.extend([Spacer(1,10),_safe_paragraph(report["disclaimer"],small)])
     def decorate(canvas,doc):
         canvas.saveState()
+        if logo.is_file():
+            canvas.drawImage(str(logo),14*mm,196*mm,width=44*mm,height=11.82*mm,mask="auto")
         canvas.setFont("Helvetica",8);canvas.setFillColor(colors.HexColor("#506781"))
         canvas.drawString(14*mm,10*mm,"PT. Li Liang ERP | Internal research pilot")
         canvas.drawRightString(283*mm,10*mm,"Page "+str(doc.page))

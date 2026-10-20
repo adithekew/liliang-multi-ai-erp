@@ -12,6 +12,24 @@ class PilotFlow(unittest.TestCase):
     def test_end_to_end(self):
         with TestClient(app) as client:
             self.assertEqual(client.get("/healthz").status_code,200)
+            # Official branding must be present in the same server-rendered HTML
+            # for every route. The asset must be served by Render, not an external
+            # expiring CDN link or device-side localStorage.
+            brand=client.get("/branding/logo?v=20261020")
+            self.assertEqual(brand.status_code,200,brand.text[:100] if brand.status_code!=200 else "")
+            self.assertEqual(brand.headers["content-type"],"image/jpeg")
+            self.assertTrue(brand.content.startswith(bytes((0xFF,0xD8))))
+            self.assertGreater(len(brand.content),2500)
+            for route in ("/","/workspace","/dashboard","/catalog",
+                          "/inquiries","/ai/hybrid","/ai/evidence",
+                          "/ai/status","/reports","/admin/users"):
+                page=client.get(route)
+                self.assertEqual(page.status_code,200,route)
+                self.assertIn('class="official-login-logo"',page.text)
+                self.assertIn('class="official-sidebar-logo"',page.text)
+                self.assertIn('class="official-topbar-logo"',page.text)
+                self.assertIn("branding/logo?v=20261020",page.text)
+
             self.assertTrue(client.get("/readyz").json()["ready"])
             self.assertEqual(client.get("/v1/products").status_code,401)
             self.assertEqual(client.post("/v1/auth/login",json={"email":"admin@test.local","password":"WRONG"}).status_code,401)
