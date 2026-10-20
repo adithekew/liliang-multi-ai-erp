@@ -68,10 +68,10 @@ class PilotFlow(unittest.TestCase):
             duplicate=client.post(f"/v1/inquiries/{iid}/match",headers=roles["sales"])
             self.assertEqual(duplicate.status_code,409,duplicate.text)
             self.assertEqual(client.get(f"/v1/inquiries/{iid}/latest-match",headers=roles["sales"]).json()["run_id"],rid)
-            abstained=client.post("/v1/inquiries",headers=roles["admin"],json={
+            abstained=client.post("/v1/inquiries",headers=admin,json={
                 "customer_ref":"UAT-UNSUPPORTED","requirement":"Need kiwi powder for bakery"})
             self.assertEqual(abstained.status_code,201,abstained.text)
-            no_match=client.post(f'/v1/inquiries/{abstained.json()["id"]}/match',headers=roles["admin"])
+            no_match=client.post(f'/v1/inquiries/{abstained.json()["id"]}/match',headers=admin)
             self.assertEqual(no_match.status_code,200,no_match.text)
             self.assertEqual(no_match.json()["status"],"NO_MATCH")
             self.assertEqual(no_match.json()["candidates"],[])
