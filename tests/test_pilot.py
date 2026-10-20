@@ -63,6 +63,24 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(run.status_code,200,run.text)
             self.assertEqual(run.json()["candidates"][0]["sku"],"FLV-STRAW-01")
             rid=run.json()["run_id"]
+            self.assertEqual(run.json()["method"],"bm25-catalog-constraint-v0.3")
+            # Repeated matching cannot generate five duplicate runs as in previous UAT.
+            duplicate=client.post(f"/v1/inquiries/{iid}/match",headers=roles["sales"])
+            self.assertEqual(duplicate.status_code,409,duplicate.text)
+            self.assertEqual(client.get(f"/v1/inquiries/{iid}/latest-match",headers=roles["sales"]).json()["run_id"],rid)
+            abstained=client.post("/v1/inquiries",headers=roles["admin"],json={
+                "customer_ref":"UAT-UNSUPPORTED","requirement":"Need kiwi powder for bakery"})
+            self.assertEqual(abstained.status_code,201,abstained.text)
+            no_match=client.post(f'/v1/inquiries/{abstained.json()["id"]}/match',headers=roles["admin"])
+            self.assertEqual(no_match.status_code,200,no_match.text)
+            self.assertEqual(no_match.json()["status"],"NO_MATCH")
+            self.assertEqual(no_match.json()["candidates"],[])
+            smoke=client.get("/v1/ai/catalog-smoke",headers=roles["technical"])
+            self.assertEqual(smoke.status_code,200,smoke.text)
+            self.assertEqual(smoke.json()["constraints_total"],5)
+            self.assertIsNone(smoke.json()["scientific_precision"])
+            self.assertFalse(smoke.json()["training_performed"])
+            self.assertEqual(client.get("/v1/ai/catalog-smoke",headers=roles["gudang"]).status_code,403)
             self.assertEqual(client.post(f"/v1/inquiries/{iid}/decision",
                 json={"decision":"APPROVE","note":"Before expert review"},headers=roles["manager"]).status_code,409)
             self.assertEqual(client.post(f"/v1/matches/{rid}/review",json={
