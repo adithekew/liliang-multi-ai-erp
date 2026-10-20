@@ -185,6 +185,43 @@ def mount_ai(app,current,get_db):
             ]
         }
 
+    @app.get("/v1/ai/catalog-smoke")
+    def catalog_smoke(u=Depends(current),db=Depends(get_db)):
+        """Read-only domain constraints check on current catalog. NOT an accuracy score."""
+        if u["role"] not in ("admin","technical","manager"):
+            raise HTTPException(403,"Role access denied")
+        from research.catalog_matcher import normalized_tokens
+        prompts=[
+            ("strawberry_typo","Butuh Rasa Susu Strowbery","strawberry",None),
+            ("strawberry_dairy","strawberry flavor untuk minuman susu dairy","strawberry",None),
+            ("lemon_powder","rasa lemon serbuk untuk produksi roti","lemon","powder"),
+            ("mango_drink","butuh rasa mangga minuman","mango",None),
+            ("coconut_drink","rasa kelapa untuk minuman","coconut",None)
+        ]
+        catalog=db.execute("SELECT * FROM products ORDER BY sku").fetchall()
+        results=[]
+        for key,q,flavor,required_form in prompts:
+            candidates=score_products(q,catalog)
+            candidates_ok=bool(candidates) and all(
+                flavor in normalized_tokens(c["name"])
+                and (not required_form or required_form in normalized_tokens(c["name"]))
+                for c in candidates)
+            results.append({"case":key,"query":q,
+              "constraint_consistency":"PASS" if candidates_ok else "FAIL",
+              "top_sku":candidates[0]["sku"] if candidates else None,
+              "top_name":candidates[0]["name"] if candidates else None,
+              "candidate_count":len(candidates),"requirement":flavor,
+              "expected_form":required_form})
+        passed=sum(x["constraint_consistency"]=="PASS" for x in results)
+        return {
+          "method":"CATALOG_CONSTRAINT_SMOKE_NOT_EXPERT_ACCURACY",
+          "product_count":len(catalog),"scenarios":results,
+          "constraints_passed":passed,"constraints_total":len(results),
+          "scientific_precision":None,"expert_validated":False,
+          "training_performed":False,
+          "warning":"These checks verify named flavor/form consistency only. They are not precision, Recall@5, or customer suitability labels."
+        }
+
     @app.get("/v1/ai/hybrid-cases")
     def hybrid_cases(u=Depends(current)):
         if u["role"] not in ("admin","sales","technical","manager"):
