@@ -255,7 +255,8 @@ function renderInquiryInsight(d){
    '<summary style="cursor:pointer;font-weight:700">'+safe(x.sku)+' · '+safe(x.decision_support)+(x.risk==="HIGH"?' · PERINGATAN':'')+'</summary>'+
    '<p class="small">'+safe(x.note)+'</p><ul class="small">'+flags+'</ul>'+
    '<p class="fine">Sumber: '+safe(x.catalog_source)+' · Status evidence: '+safe(x.evidence_classification)+
-   ' · Keputusan Technical: '+safe(x.technical_decision||"PENDING")+'</p></details>';
+   ' · Keputusan Technical: '+safe(x.technical_decision||"PENDING")+'</p>'+
+   (x.technical_note?'<p class="small"><b>Catatan Technical:</b> '+safe(x.technical_note)+'</p>':'')+'</details>';
  }).join('');
  const tasks=i.next_actions.map(x=>'<li>'+safe(x)+'</li>').join("");
  return '<section class="card" style="border-left:4px solid #2f6cbd">'+
