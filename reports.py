@@ -207,12 +207,28 @@ def inquiry_receipt(user,db,iid):
     rows=[["Inquiry ID",q["id"]],["Customer Reference",q["customer_ref"]],
           ["Requirement",q["requirement"]],["Status",q["status"]],
           ["Created At",q["created_at"]],["Created By",q["name"]]]
+    from research.inquiry_insights import inquiry_insight
+    if not runs:
+        insight=inquiry_insight(q["requirement"],[],"NOT_RUN",q["status"])
+        rows.append(["Inquiry Insight",insight["summary"]])
+        for action in insight["next_actions"]:
+            rows.append(["Recommended Action",action])
     for r in runs:
         rows.append(["Matching Run",str(r["id"])+" | "+r["method"]+" | "+str(r["latency_ms"])+"ms"])
-        candidates=db.execute("""SELECT c.rank,p.sku,p.name,c.score FROM candidates c
-                                 JOIN products p ON p.id=c.product_id WHERE c.run_id=? ORDER BY c.rank""",(r["id"],)).fetchall()
-        for c in candidates:
+        candidates=db.execute("""SELECT c.rank,p.id AS product_id,p.sku,p.name,p.description,p.profile,p.application,p.source_ref,c.score
+                                 FROM candidates c JOIN products p ON p.id=c.product_id
+                                 WHERE c.run_id=? ORDER BY c.rank""",(r["id"],)).fetchall()
+        detail=inquiry_insight(q["requirement"],[dict(c) for c in candidates],r["method"],q["status"])
+        intent=detail["interpreted_requirement"]
+        rows.append(["Inquiry Insight",detail["summary"]])
+        rows.append(["Detected Requirement","Rasa: "+", ".join(intent["flavors"])+" | Bentuk: "+", ".join(intent["forms"])+" | Aplikasi: "+", ".join(intent["applications"])])
+        for c,ins in zip(candidates,detail["candidates"]):
             rows.append(["Candidate "+str(c["rank"]),str(c["sku"])+" | "+str(c["name"])+" | BM25 score "+str(c["score"])])
+            rows.append(["System Note "+str(c["rank"]),ins["decision_support"]+" | "+ins["note"]])
+            for flag in ins["flags"]:
+                rows.append(["Evidence "+str(c["rank"])+" / "+flag["aspect"],flag["status"]+" | "+flag["detail"]])
+        for action in detail["next_actions"]:
+            rows.append(["Recommended Action",action])
         reviews=db.execute("""SELECT p.sku,v.label,v.decision,v.note,v.reviewer_id FROM reviews v
                               JOIN products p ON p.id=v.product_id WHERE v.run_id=? ORDER BY v.id""",(r["id"],)).fetchall()
         for v in reviews:
@@ -224,7 +240,7 @@ def inquiry_receipt(user,db,iid):
     return {"type":"inquiry_receipt","title":"Inquiry #"+str(iid)+" - Transaction Report",
             "source":"LIVE_ERP_TRANSACTION","generated_at":datetime.now(timezone.utc).isoformat(),
             "columns":["Field","Recorded Detail"],"rows":rows,"count":len(rows),
-            "disclaimer":"BM25 score is uncalibrated. Technical review/Manager approval are separate business decisions, not scientific accuracy measurements."}
+            "disclaimer":"Inquiry Insight is deterministic explanation derived from UNVERIFIED catalogue text and the SAVED ranking at its historical method version. Notes do not prove suitability, safety, halal compliance, quality, or measured precision. BM25 is uncalibrated; Technical and Manager decisions are separate recorded business actions."}
 
 def export(report,fmt,filename):
     if fmt=="json":return JSONResponse(report,headers=NO_STORE)
