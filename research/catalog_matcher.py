@@ -107,6 +107,9 @@ def _product_form(product):
 
 def _product_application(product):
     app=set(normalized_tokens(product.get("application","")))
+    title=set(normalized_tokens(product.get("name","")))
+    if app&{"cigarette","cigarettes","vaping","vape"} or title&{"vape","vaping"}:
+        return {"vape"}
     return app & APPLICATIONS
 
 def _bm25_score(query_terms, document, frequencies, avgdl, total):
@@ -179,7 +182,7 @@ def score_products(query, products):
             "requested_forms":intent["forms"],
             "requested_applications":intent["applications"],
             "retrieval_status":"LEXICAL_CANDIDATE_UNVERIFIED",
-            "limitations":"Flavor mismatch gated out; match score is not accuracy. Technical approval and datasheet evidence required."}})
+            "limitations":"Lexical candidate only. Flavor mismatch gated out; score is not accuracy. Technical approval and datasheet evidence required."}})
     ranks.sort(key=lambda x:(-x["score"],x["sku"]))
     for idx,x in enumerate(ranks[:5],1):x["rank"]=idx
     return ranks[:5]
