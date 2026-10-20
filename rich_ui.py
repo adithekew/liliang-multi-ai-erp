@@ -243,14 +243,40 @@ async function inquiries(){
   await api("/v1/inquiries","POST",z);toast("Inquiry disimpan");await inquiries()
  }catch(err){fail(err)}};
 }
+function renderInquiryInsight(d){
+ const i=d.insight;
+ if(!i)return '';
+ const safe=v=>escapeHtml(String(v===undefined||v===null?"—":v));
+ const req=i.interpreted_requirement||{};
+ const val=x=>Array.isArray(x)&&x.length?x.join(", "):"Belum ditentukan";
+ const indicators=(i.candidates||[]).map((x,j)=>{
+  const flags=x.flags.map(f=>'<li><b>'+safe(f.aspect)+'</b> · <span class="tag '+(f.status==="MISMATCH"?"unknown":"")+'">'+safe(f.status)+'</span> '+safe(f.detail)+'</li>').join("");
+  return '<details style="padding:12px 0;border-top:1px solid #e4ebf5" '+(j===0?'open':'')+'>'+
+   '<summary style="cursor:pointer;font-weight:700">'+safe(x.sku)+' · '+safe(x.decision_support)+(x.risk==="HIGH"?' · PERINGATAN':'')+'</summary>'+
+   '<p class="small">'+safe(x.note)+'</p><ul class="small">'+flags+'</ul>'+
+   '<p class="fine">Sumber: '+safe(x.catalog_source)+' · Status evidence: '+safe(x.evidence_classification)+
+   ' · Keputusan Technical: '+safe(x.technical_decision||"PENDING")+'</p></details>';
+ }).join('');
+ const tasks=i.next_actions.map(x=>'<li>'+safe(x)+'</li>').join("");
+ return '<section class="card" style="border-left:4px solid #2f6cbd">'+
+ '<div class="toolbar"><h2>Inquiry Insight & Catatan Keputusan</h2><span class="tag unknown">ANALISIS KATALOG · BUKAN VALIDASI PAKAR</span></div>'+
+ '<p class="sub">'+safe(i.summary)+'</p>'+
+ '<div class="grid"><div class="card"><span class="fine">Rasa terdeteksi</span><h3>'+safe(val(req.flavors))+'</h3></div>'+
+ '<div class="card"><span class="fine">Bentuk dibutuhkan</span><h3>'+safe(val(req.forms))+'</h3></div>'+
+ '<div class="card"><span class="fine">Aplikasi</span><h3>'+safe(val(req.applications))+'</h3></div></div>'+
+ '<p class="small"><b>Tahap saat ini:</b> '+safe(i.stage)+' · <b>Ranking sumber:</b> '+safe(i.ranking_method)+'</p>'+
+ '<h3>Insight per SKU / alasan dan risiko</h3>'+indicators+
+ '<h3 style="margin-top:16px">Tindak lanjut per role</h3><ol class="small">'+tasks+'</ol>'+
+ '<p class="note">'+safe(i.notice)+'</p></section>';
+}
 function displayCandidates(d){
  const run=d.run_id||null;
- if(!run){$("workflowResult").innerHTML='<div class="card"><p class="empty">Belum ada matching untuk inquiry ini.</p></div>';return}
+ if(!run){$("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><p class="empty">Belum ada matching untuk inquiry ini.</p></div>';return}
  if(!d.candidates||!d.candidates.length){
-   $("workflowResult").innerHTML='<div class="card"><h2>NO MATCH — Perlu Klarifikasi</h2><p class="error">Sistem tidak menemukan SKU yang memenuhi rasa atau bentuk produk yang diminta. Tidak ada substitusi otomatis.</p><p class="note">Periksa ejaan, tipe produk dan spesifikasi; buat inquiry baru setelah kebutuhan diperjelas. Tidak ada keputusan Technical/Manager tanpa kandidat yang dapat diverifikasi.</p></div>';
+   $("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><h2>NO MATCH — Perlu Klarifikasi</h2><p class="error">Sistem tidak menemukan SKU yang memenuhi rasa atau bentuk produk yang diminta. Tidak ada substitusi otomatis.</p><p class="note">Periksa ejaan, tipe produk dan spesifikasi; buat inquiry baru setelah kebutuhan diperjelas. Tidak ada keputusan Technical/Manager tanpa kandidat yang dapat diverifikasi.</p></div>';
    return;
  }
- $("workflowResult").innerHTML='<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
+ $("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
  d.candidates.map(x=>{
   const label=x.expert_decision?escapeHtml(x.expert_decision)+" / relevance "+escapeHtml(x.expert_relevance):"PENDING";
   const control=(me.role==="technical"&&!x.expert_decision)?'<button class="btn secondary" onclick="expertReview('+run+','+x.product_id+')">Review 0–3</button>':"—";
