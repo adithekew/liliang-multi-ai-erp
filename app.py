@@ -202,19 +202,28 @@ def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_
     q=db.execute("SELECT * FROM inquiries WHERE id=?",(iid,)).fetchone()
     if not q:raise HTTPException(404,"Inquiry not found")
     if u["role"]=="sales" and q["created_by"]!=u["id"]:raise HTTPException(403,"Not your inquiry")
+    if q["status"]!="NEW":
+        raise HTTPException(409,"This inquiry was already processed. Open saved candidates; do not rerun matching.")
     t=time.monotonic()
     candidates=score_products(q["requirement"],db.execute("SELECT * FROM products").fetchall())
     elapsed=int((time.monotonic()-t)*1000)
+    new_status="MATCHED" if candidates else "NO_MATCH"
     with db:
-        run=db.execute("INSERT INTO runs(inquiry_id,method,latency_ms,created_at) VALUES(?,'bm25-expert-review-demo-v0.2',?,?)",(iid,elapsed,now()))
+        # Atomic status transition prevents double-click duplicates and changes after review.
+        claimed=db.execute("UPDATE inquiries SET status=? WHERE id=? AND status='NEW'",(new_status,iid))
+        if claimed.rowcount!=1:
+            raise HTTPException(409,"This inquiry was already matched by another request.")
+        run=db.execute("INSERT INTO runs(inquiry_id,method,latency_ms,created_at) VALUES(?,'bm25-catalog-constraint-v0.3',?,?)",(iid,elapsed,now()))
         for rank,item in enumerate(candidates,1):
             item["rank"]=rank
             db.execute("INSERT INTO candidates(run_id,product_id,score,rank,unknown) VALUES(?,?,?,?,?)",
                      (run.lastrowid,item["product_id"],item["score"],rank,",".join(item["unknown_attributes"])))
-        db.execute("UPDATE inquiries SET status='MATCHED' WHERE id=?",(iid,))
-        audit(db,u,"MATCH_BASELINE","run",run.lastrowid,after={"method":"BM25","candidate_count":len(candidates),"latency_ms":elapsed})
-    return {"run_id":run.lastrowid,"method":"bm25-expert-review-demo-v0.2","latency_ms":elapsed,
-            "candidates":candidates,"notice":"BM25-only operational shortlist. Score is uncalibrated relevance, NOT accuracy or suitability probability. Neural evaluation is separate in Hybrid Semantic Lab. Technical review required."}
+        audit(db,u,"MATCH_BASELINE","run",run.lastrowid,
+              after={"method":"BM25_CONSTRAINT_AWARE","candidate_count":len(candidates),"latency_ms":elapsed,
+                     "abstained":not bool(candidates)})
+    return {"run_id":run.lastrowid,"method":"bm25-catalog-constraint-v0.3","latency_ms":elapsed,
+            "status":new_status,"abstained":not bool(candidates),
+            "candidates":candidates,"notice":"No candidate is returned when required flavor/form evidence is missing. Scores are uncalibrated BM25, NOT accuracy or suitability probabilities. Technical must validate every candidate."}
 @app.get("/v1/inquiries/{iid}/latest-match")
 def latest_match(iid:int,u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
     q=db.execute("SELECT id,created_by,status FROM inquiries WHERE id=?",(iid,)).fetchone()
