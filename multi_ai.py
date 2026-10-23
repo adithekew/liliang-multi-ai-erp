@@ -190,7 +190,7 @@ def mount_ai(app,current,get_db):
         """Read-only domain constraints check on current catalog. NOT an accuracy score."""
         if u["role"] not in ("admin","technical","manager"):
             raise HTTPException(403,"Role access denied")
-        from research.catalog_matcher import normalized_tokens
+        from research.catalog_matcher import normalized_tokens, _product_form
         prompts=[
             ("strawberry_typo","Butuh Rasa Susu Strowbery","strawberry",None),
             ("strawberry_dairy","strawberry flavor untuk minuman susu dairy","strawberry",None),
@@ -199,14 +199,23 @@ def mount_ai(app,current,get_db):
             ("coconut_drink","rasa kelapa untuk minuman","coconut",None)
         ]
         catalog=db.execute("SELECT * FROM products ORDER BY sku").fetchall()
+        by_sku={p["sku"]:dict(p) for p in catalog}
         results=[]
         for key,q,flavor,required_form in prompts:
             candidates=score_products(q,catalog)
-            candidates_ok=bool(candidates) and all(
+            # Validate parsed product form from structured supplier catalog
+            # descriptor as well as title; do not require the word "powder"
+            # to be repeated in a display name.
+            checked=[(c, _product_form(by_sku.get(c["sku"],{}))) for c in candidates]
+            candidates_ok=bool(checked) and all(
                 flavor in normalized_tokens(c["name"])
-                and (not required_form or required_form in normalized_tokens(c["name"]))
-                for c in candidates)
+                and (not required_form or form==required_form)
+                for c,form in checked)
+            top_form=checked[0][1] if checked else None
             results.append({"case":key,"query":q,
+              "top_detected_form":top_form,
+              "unverified_form_count":sum(1 for _,form in checked if form is None),
+              "validation_note":"Checks all Top-5; matching product type may be in catalog metadata, not SKU name",
               "constraint_consistency":"PASS" if candidates_ok else "FAIL",
               "top_sku":candidates[0]["sku"] if candidates else None,
               "top_name":candidates[0]["name"] if candidates else None,
