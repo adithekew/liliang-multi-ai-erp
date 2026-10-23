@@ -172,7 +172,7 @@ def score_products(query, products):
           "score":round(lexical,4),"source_ref":p.get("source_ref","UNKNOWN"),
           "unknown_attributes":["regulatory","halal_status","product_suitability"],
           "evidence_verified":False,"profile":p.get("profile"),
-          "application":p.get("application"),
+          "application":p.get("application"),"product_form":form or "UNKNOWN",
           "explanation":{
             "matched_terms":sorted(set(terms)&set(name+app+desc))[:12],
             "flavor_tag_match":flavor_exact,
