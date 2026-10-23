@@ -27,12 +27,16 @@ def append_event(db, actor, action, entity, entity_id, before=None, after=None):
     """Append an atomic, low-PII audit event in the same transaction as the change."""
     old=json_text(before if before is not None else {})
     new=json_text(after if after is not None else {})
-    digest=hashlib.sha256((old+"\n"+new).encode("utf-8")).hexdigest()
     event_id=str(uuid.uuid4())
+    timestamp=stamp()
+    # v2: unique per event and bound to persisted metadata, unlike old hashes
+    # that collided on repeated identical LOGIN / LOGOUT payloads.
+    digest=hashlib.sha256(("v2|"+event_id+"|"+str(actor["id"])+"|"+actor["role"]+
+        "|"+action+"|"+entity+"|"+str(entity_id)+"|"+timestamp+"|"+old+"\n"+new).encode("utf-8")).hexdigest()
     db.execute("""INSERT INTO transaction_events
       (id,actor_id,actor_role,action,entity,entity_id,at,request_id,before_json,after_json,payload_sha256)
       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-      (event_id,actor["id"],actor["role"],action,entity,str(entity_id),stamp(),event_id,old,new,digest))
+      (event_id,actor["id"],actor["role"],action,entity,str(entity_id),timestamp,event_id,old,new,digest))
     return event_id
 
 class ConfirmReset(BaseModel):
