@@ -80,7 +80,12 @@ def current(creds:HTTPAuthorizationCredentials|None=Depends(auth),db:sqlite3.Con
             raise ValueError("Session was revoked or expired")
         if t-float(session["last_seen_at"])>SESSION_IDLE_SECONDS:
             with db:
-                db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL",(t,sid))
+                expired=db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL",(t,sid))
+                if expired.rowcount:
+                    actor=db.execute("SELECT id,role FROM users WHERE id=?",(uid,)).fetchone()
+                    if actor:
+                        audit(db,dict(actor),"SESSION_EXPIRED_IDLE","auth",uid,
+                              after={"reason":"SERVER_IDLE_15_MIN","session_ref":secrets.token_hex(8)})
             raise ValueError("Session inactive")
         row=db.execute("SELECT id,email,name,role FROM users WHERE id=?",(uid,)).fetchone()
         if not row:raise ValueError("Account unavailable")
@@ -149,12 +154,15 @@ def login(data:Login,db=Depends(get_db)):
 @app.get("/v1/auth/me")
 def me(u=Depends(current)):return u
 @app.post("/v1/auth/logout")
-def logout(creds:HTTPAuthorizationCredentials|None=Depends(auth),u=Depends(current),db=Depends(get_db)):
+def logout(request:Request,creds:HTTPAuthorizationCredentials|None=Depends(auth),u=Depends(current),db=Depends(get_db)):
     claim=jwt.decode(creds.credentials,SECRET_KEY,algorithms=["HS256"])
+    reason="IDLE" if request.headers.get("X-Logout-Reason")=="IDLE" else "MANUAL"
     with db:
-        db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND user_id=?",
-                   (time.time(),claim["sid"],u["id"]))
-        audit(db,u,"LOGOUT","auth",u["id"],after={"session_revoked":True})
+        revoked=db.execute("UPDATE user_sessions SET revoked_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL",
+                          (time.time(),claim["sid"],u["id"]))
+        if revoked.rowcount:
+            audit(db,u,"SESSION_EXPIRED_IDLE" if reason=="IDLE" else "LOGOUT","auth",u["id"],
+                  after={"session_revoked":True,"reason":reason})
     return {"logged_out":True,"session_revoked":True}
 @app.post("/v1/users",status_code=201)
 def add_user(data:NewUser,u=Depends(permit("admin")),db=Depends(get_db)):
@@ -262,6 +270,15 @@ def show_match(rid:int,u=Depends(permit("admin","sales","technical","manager")),
 def review(rid:int,data:ReviewIn,u=Depends(permit("technical")),db=Depends(get_db)):
     q=db.execute("SELECT r.inquiry_id,c.id candidate_id FROM runs r JOIN candidates c ON c.run_id=r.id WHERE r.id=? AND c.product_id=?",(rid,data.product_id)).fetchone()
     if not q:raise HTTPException(400,"Candidate not in run")
+    if data.decision=="ACCEPT" and data.relevance_label!=3:
+        raise HTTPException(422,"ACCEPT requires Technical relevance label 3; use NEEDS_INFO for label 2")
+    if data.relevance_label==0 and data.decision!="REJECT":
+        raise HTTPException(422,"Relevance label 0 must be REJECT")
+    if data.relevance_label==3 and data.decision=="REJECT":
+        raise HTTPException(422,"Relevance label 3 cannot be REJECT")
+    status=db.execute("SELECT status FROM inquiries WHERE id=?",(q["inquiry_id"],)).fetchone()
+    if not status or status["status"] in ("APPROVED","RETURNED"):
+        raise HTTPException(409,"Inquiry already decided; Technical review is closed")
     with db:
         cur=db.execute("INSERT INTO reviews(run_id,product_id,reviewer_id,decision,label,note) VALUES(?,?,?,?,?,?)",
                        (rid,data.product_id,u["id"],data.decision,data.relevance_label,data.rationale))
@@ -272,11 +289,18 @@ def review(rid:int,data:ReviewIn,u=Depends(permit("technical")),db=Depends(get_d
 def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depends(get_db)):
     q=db.execute("SELECT id,status FROM inquiries WHERE id=?",(iid,)).fetchone()
     if not q:raise HTTPException(404,"Inquiry not found")
-    if q["status"]!="TECH_REVIEWED":raise HTTPException(409,"Expert review required")
+    if q["status"] in ("APPROVED","RETURNED"):
+        raise HTTPException(409,"Inquiry already decided; repeat approval is not allowed")
+    if q["status"]!="TECH_REVIEWED":
+        raise HTTPException(409,"Technical review required before Manager decision")
     if data.decision=="APPROVE":
         accepted=db.execute("""SELECT 1 FROM reviews v JOIN runs r ON r.id=v.run_id
-          WHERE r.inquiry_id=? AND v.decision='ACCEPT' LIMIT 1""",(iid,)).fetchone()
-        if not accepted:raise HTTPException(409,"At least one accepted Technical review required")
+          WHERE r.inquiry_id=? AND v.decision='ACCEPT' AND v.label=3
+          AND v.id=(SELECT MAX(v2.id) FROM reviews v2
+                    WHERE v2.run_id=v.run_id AND v2.product_id=v.product_id)
+          LIMIT 1""",(iid,)).fetchone()
+        if not accepted:
+            raise HTTPException(409,"Manager approval requires a latest Technical ACCEPT with relevance label 3")
     status="APPROVED" if data.decision=="APPROVE" else "RETURNED"
     with db:
         db.execute("UPDATE inquiries SET status=? WHERE id=?",(status,iid))
@@ -336,6 +360,28 @@ PAGE_ROUTES = {
 @app.middleware("http")
 async def disable_device_cache(request:Request, call_next):
     response=await call_next(request)
+    # Record authenticated access-denied / business-conflict attempts without
+    # logging request bodies, JWTs or anonymous customer requirements.
+    if (response.status_code in (403,409) and request.url.path.startswith("/v1/")
+            and not request.url.path.startswith("/v1/auth/")):
+        try:
+            bearer=request.headers.get("authorization","")
+            if bearer.lower().startswith("bearer "):
+                claims=jwt.decode(bearer[7:],SECRET_KEY,algorithms=["HS256"])
+                with connect() as trace_db:
+                    u=trace_db.execute("SELECT id,role FROM users WHERE id=?",
+                                       (int(claims["sub"]),)).fetchone()
+                    session=trace_db.execute("SELECT id FROM user_sessions WHERE id=? AND user_id=? AND revoked_at IS NULL",
+                                             (claims.get("sid"),int(claims["sub"]))).fetchone()
+                    if u and session:
+                        from enterprise_ops import append_event
+                        append_event(trace_db,dict(u),
+                          "ACCESS_DENIED_403" if response.status_code==403 else "BUSINESS_CONFLICT_409",
+                          "http_request",0,after={"method":request.method,
+                          "path":request.url.path,"http_status":response.status_code})
+        except Exception:
+            # Audit availability must not disrupt the business response.
+            pass
     if request.url.path in PAGE_ROUTES or request.url.path.startswith("/v1/"):
         response.headers["Cache-Control"]="private, no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"]="no-cache"
