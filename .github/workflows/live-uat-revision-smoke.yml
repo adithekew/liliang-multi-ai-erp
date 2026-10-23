@@ -30,7 +30,11 @@ jobs:
             "idle warning": "Sesi akan berakhir",
             "navigation groups": "APPLIED BI & INVENTORY",
             "login idempotency": 'button.disabled=true;button.textContent="Memverifikasi akun..."',
-            "research/UAT count distinction": "UAT technical reviews:"
+            "research/UAT count distinction": "UAT technical reviews:",
+            "Gudang Inquiry RBAC": 'if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role)',
+            "legacy UAT conflict flag": "HISTORICAL UAT CONFLICT",
+            "candidate physical form": "Bentuk Katalog",
+            "stock count evidence": "physical_count_date"
           }
           def fetch(path):
               req=Request(base+path,headers={"User-Agent":"Liliang-UAT-Revision-Smoke/1.0",
@@ -49,7 +53,7 @@ jobs:
                   for path in ("/inquiries","/dashboard","/reports"):
                       page=fetch(path).decode("utf-8")
                       assert 'function actionForm(title,fields)' in page,path
-                  print("PASS: live Render serves merged 23-Oct-2026 UAT remediation UI")
+                  print("PASS: Render serves third-UAT corrective UI revision with warehouse isolation and review warnings")
                   print("Health/readiness and new UI revision markers are present across routed pages")
                   print("NOTE: browser interaction, authenticated workflows and model precision still require UAT")
                   break
