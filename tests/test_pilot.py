@@ -111,9 +111,10 @@ class PilotFlow(unittest.TestCase):
                 headers=roles["technical"]).status_code,200)
             self.assertEqual(client.post(f"/v1/inquiries/{iid}/decision",
                 json={"decision":"APPROVE","note":"Technical recommended"},headers=roles["manager"]).status_code,200)
-            warehouse=client.get("/v1/inquiries",headers=roles["gudang"]).json()[0]
-            self.assertNotIn("requirement",warehouse)
-            self.assertNotIn("customer_ref",warehouse)
+            # Gudang must not enumerate inquiry metadata at all (third UAT).
+            self.assertEqual(client.get("/v1/inquiries",headers=roles["gudang"]).status_code,403)
+            self.assertEqual(client.get(f"/v1/inquiries/{iid}/latest-match",
+                headers=roles["gudang"]).status_code,403)
             # Every ERP & AI module exposes an authenticated fresh report export.
             available=client.get("/v1/reports/available",headers=admin)
             self.assertEqual(available.status_code,200,available.text)
