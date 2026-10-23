@@ -105,7 +105,7 @@ function actionForm(title,fields){
    const opts=(f.options||[]).map(o=>'<option value="'+escapeHtml(o[0])+'">'+escapeHtml(o[1])+'</option>').join("");
    const control=f.options?'<select'+common+'>'+opts+'</select>':
      f.multiline?'<textarea'+common+' minlength="'+(f.minlength||1)+'" maxlength="500"></textarea>':
-     '<input'+common+' type="'+(f.type||"text")+'"'+(f.minlength?' minlength="'+f.minlength+'"':'')+'>';
+     '<input'+common+' type="'+(f.type||"text")+'"'+(f.type==="number"?' min="0" step="any"':'')+(f.minlength?' minlength="'+f.minlength+'"':'')+'>';
    return '<label for="'+id+'">'+escapeHtml(f.label)+'</label>'+control;
   }).join("");
   overlay.innerHTML='<section class="dialog-panel" role="dialog" aria-modal="true" aria-label="'+escapeHtml(title)+'"><h2>'+escapeHtml(title)+'</h2><form id="actionEntry">'+body+'<div class="actions"><button type="button" class="btn secondary" id="actionCancel">Batal</button><button type="submit" class="btn">Simpan keputusan</button></div></form></section>';
@@ -197,6 +197,7 @@ function allowed(key){
  if(key==="reports")return true;
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research")return ["admin","technical","manager"].includes(me.role);
+ if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
  if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
  return true;
@@ -255,7 +256,7 @@ async function overview(){
 let catalogPage=1,catalogQuery="";
 async function catalog(){
  let data=await api("/v1/catalog/products?q="+encodeURIComponent(catalogQuery)+"&page="+catalogPage+"&size=50");
- const editable=["admin","gudang"].includes(me.role);
+ const editable=["admin","gudang"].includes(me.role) && !String(me.email||"").toLowerCase().startsWith("uat-");
  $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
  "1.452 SKU dari PDF PT. Li Liang masih menunggu Technical validation. Stok yang belum dikonfirmasi Gudang ditampilkan UNKNOWN; jangan memasukkan stok simulasi pada katalog perusahaan.")+
  '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'pdf\')">PDF 1.452 SKU</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'csv\')">CSV Semua SKU</button><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div></div>'+
@@ -271,12 +272,22 @@ async function catalog(){
 }
 async function editStock(id){
  if(!["admin","gudang"].includes(me.role))return;
- const raw=prompt("Kuantitas stok aktual terverifikasi untuk Product ID #"+id+". Jangan gunakan angka uji pada katalog perusahaan.");
- if(raw===null)return;
- const amount=Number(raw);
- if(raw.trim()===""||!Number.isFinite(amount)||amount<0){toast("Stok harus berupa angka valid >= 0",true);return}
- if(!confirm("Konfirmasi stok fisik terverifikasi: "+amount+" unit. Perubahan ini tersimpan permanen dan dicatat dalam Audit Transactions."))return;
- try{await api("/v1/products/"+id+"/stock","PATCH",{stock_qty:amount});toast("Inventory update saved and audited.");await catalog()}
+ if(String(me.email||"").toLowerCase().startsWith("uat-")){toast("Akun UAT tidak boleh mengubah stok riil.",true);return}
+ const d=await actionForm("Verifikasi stok fisik SKU #"+id,[
+  {name:"stock_qty",label:"Kuantitas hasil stock opname (bukan simulasi)",type:"number"},
+  {name:"verification_ref",label:"Nomor dokumen hasil hitung fisik (contoh: SO-2026-001)"},
+  {name:"physical_count_date",label:"Tanggal pemeriksaan stok fisik (YYYY-MM-DD)",type:"date"}
+ ]);
+ if(!d)return;
+ const amount=Number(d.stock_qty);
+ if(!Number.isFinite(amount)||amount<0){toast("Kuantitas stok tidak valid",true);return}
+ if(!d.verification_ref||d.verification_ref.trim().length<6||!d.physical_count_date){
+   toast("Referensi dokumen dan tanggal verifikasi stok wajib diisi",true);return
+ }
+ if(!confirm("Simpan stok fisik "+amount+" dengan bukti "+d.verification_ref+"? Data ini bukan UAT dan akan mengubah saldo katalog."))return;
+ try{await api("/v1/products/"+id+"/stock","PATCH",{stock_qty:amount,
+    verification_ref:d.verification_ref.trim(),physical_count_date:d.physical_count_date});
+    toast("Stok fisik dan bukti deklarasi tercatat dalam audit");await catalog()}
  catch(err){fail(err)}
 }
 async function inquiries(){
@@ -343,12 +354,14 @@ function displayCandidates(d){
    $("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><h2>NO MATCH — Perlu Klarifikasi</h2><p class="error">Sistem tidak menemukan SKU yang memenuhi rasa atau bentuk produk yang diminta. Tidak ada substitusi otomatis.</p><p class="note">Periksa ejaan, tipe produk dan spesifikasi; buat inquiry baru setelah kebutuhan diperjelas. Tidak ada keputusan Technical/Manager tanpa kandidat yang dapat diverifikasi.</p></div>';
    return;
  }
- $("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
+ $("workflowResult").innerHTML=renderInquiryInsight(d)+'<div class="card"><div class="toolbar"><h2>Saved Matching Run #'+run+'</h2><span class="tag unknown">'+escapeHtml(d.method||"BM25")+'</span></div><p class="sub">'+escapeHtml(d.notice||"Technical review required. BM25 score is not accuracy.")+'</p><div class="tablewrap"><table><tr><th>Rank</th><th>SKU</th><th>Flavor</th><th>Bentuk Katalog</th><th>BM25 Score</th><th>Expert Review</th><th>Action</th></tr>'+
  d.candidates.map(x=>{
   const label=x.expert_decision?escapeHtml(x.expert_decision)+" / relevance "+escapeHtml(x.expert_relevance):"PENDING";
-  const control=(me.role==="technical"&&!x.expert_decision)?'<button class="btn secondary" onclick="expertReview('+run+','+x.product_id+')">Review 0–3</button>':"—";
-  return '<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.name)+'</td><td>'+x.score+'</td><td><span class="tag unknown">'+label+'</span></td><td>'+control+'</td></tr>';
- }).join("")+'</table></div><p class="note">All stock, halal and regulatory suitability remain UNKNOWN without verified evidence. Scores are not probabilities.</p></div>';
+  const conflict=x.historical_review_conflict===true;
+  const form=escapeHtml(x.product_form||"UNKNOWN");
+  const control=(me.role==="technical"&&!x.expert_decision && d.status!=="APPROVED"&&d.status!=="RETURNED")?'<button class="btn secondary" onclick="expertReview('+run+','+x.product_id+')">Review 0–3</button>':"—";
+  return '<tr><td>#'+x.rank+'</td><td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.name)+'</td><td><span class="tag '+(form==="UNKNOWN"?"unknown":"")+'">'+form+'</span></td><td>'+x.score+'</td><td><span class="tag '+(conflict?"unknown":"")+'">'+label+'</span>'+(conflict?'<p class="error">HISTORICAL UAT CONFLICT — needs re-review; never use as research label</p>':"")+'</td><td>'+control+'</td></tr>';
+ }).join("")+'</table></div><p class="note">Bentuk produk yang tidak disebut pelanggan harus dikonfirmasi oleh Sales/Technical. Powder tidak otomatis salah untuk beverage; rekomendasi belum membuktikan kesesuaian aplikasi. All stock, halal and regulatory suitability remain UNKNOWN without verified evidence. Scores are not probabilities. Review UAT historis yang konflik ditandai dan tidak diperbaiki diam-diam.</p></div>';
  $("workflowResult").scrollIntoView({behavior:"smooth",block:"start"});
 }
 const matchingInFlight=new Set();
