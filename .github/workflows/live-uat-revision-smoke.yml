@@ -1,0 +1,60 @@
+name: Live UAT Revision Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-ui-revision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Confirm Render has deployed UAT corrective release
+        env:
+          BASE: https://liliang-multi-ai-erp-pilot.onrender.com
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from urllib.request import Request, urlopen
+
+          base=os.environ["BASE"].rstrip("/")
+          required={
+            "forms": 'function actionForm(title,fields)',
+            "explicit form": 'name="requested_form"',
+            "idle warning": "Sesi akan berakhir",
+            "navigation groups": "APPLIED BI & INVENTORY",
+            "login idempotency": 'button.disabled=true;button.textContent="Memverifikasi akun..."',
+            "research/UAT count distinction": "UAT technical reviews:"
+          }
+          def fetch(path):
+              req=Request(base+path,headers={"User-Agent":"Liliang-UAT-Revision-Smoke/1.0",
+                                                 "Cache-Control":"no-cache"})
+              with urlopen(req,timeout=40) as res:
+                  assert res.status==200,(path,res.status)
+                  return res.read()
+
+          for attempt in range(1,22):
+              try:
+                  assert json.loads(fetch("/healthz"))["status"]=="ok"
+                  assert json.loads(fetch("/readyz"))["ready"] is True
+                  html=fetch("/").decode("utf-8")
+                  missing=[label for label,marker in required.items() if marker not in html]
+                  if missing:raise AssertionError("Old Render revision, missing: "+", ".join(missing))
+                  for path in ("/inquiries","/dashboard","/reports"):
+                      page=fetch(path).decode("utf-8")
+                      assert 'function actionForm(title,fields)' in page,path
+                  print("PASS: live Render serves merged 23-Oct-2026 UAT remediation UI")
+                  print("Health/readiness and new UI revision markers are present across routed pages")
+                  print("NOTE: browser interaction, authenticated workflows and model precision still require UAT")
+                  break
+              except Exception as exc:
+                  print(f"Attempt {attempt}/21: {exc}",flush=True)
+                  if attempt==21:raise
+                  time.sleep(20)
+          PY
