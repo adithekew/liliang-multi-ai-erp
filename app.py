@@ -121,6 +121,9 @@ class DecisionIn(BaseModel):
     note:str=Field(min_length=5)
 class StockIn(BaseModel):
     stock_qty:float=Field(ge=0)
+    # The pilot never assumes an unverified supplier catalog has on-hand stock.
+    verification_ref:str=Field(default="",max_length=100)
+    physical_count_date:str=Field(default="",max_length=10)
 @app.get("/healthz")
 def health():return {"status":"ok","environment":"DEMO","persistent_database":engine_name()=="postgresql","database_backend":engine_name()}
 @app.get("/readyz")
@@ -183,12 +186,33 @@ def products(u=Depends(current),db=Depends(get_db)):
     return [dict(x) for x in db.execute("SELECT * FROM products ORDER BY sku").fetchall()]
 @app.patch("/v1/products/{pid}/stock")
 def stock(pid:int,data:StockIn,u=Depends(permit("admin","gudang")),db=Depends(get_db)):
-    previous=db.execute("SELECT stock FROM products WHERE id=?",(pid,)).fetchone()
+    previous=db.execute("SELECT stock,source_ref FROM products WHERE id=?",(pid,)).fetchone()
+    if previous is None:raise HTTPException(404,"SKU not found")
+    imported=previous["source_ref"]=="CATALOG-PDF-UNVERIFIED"
+    if imported:
+        # UAT accounts are never allowed to alter operational supplier-catalog stock.
+        if u["email"].lower().startswith("uat-"):
+            raise HTTPException(403,"UAT account cannot modify unverified company stock")
+        ref=data.verification_ref.strip()
+        if len(ref)<6 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./#-]{5,99}",ref):
+            raise HTTPException(422,"Verified physical count reference is required for company stock")
+        try:
+            verified_on=datetime.strptime(data.physical_count_date,"%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(422,"Physical count date must be YYYY-MM-DD")
+        if verified_on>datetime.now(timezone.utc).date():
+            raise HTTPException(422,"Physical count date cannot be in the future")
     with db:
         c=db.execute("UPDATE products SET stock=? WHERE id=?",(data.stock_qty,pid))
         if not c.rowcount:raise HTTPException(404,"SKU not found")
-        audit(db,u,"STOCK_UPDATE","product",pid,before={"stock":previous["stock"] if previous else None},after={"stock":data.stock_qty})
-    return {"product_id":pid,"stock_qty":data.stock_qty}
+        audit(db,u,"STOCK_UPDATE","product",pid,
+              before={"stock":previous["stock"]},
+              after={"stock":data.stock_qty,
+                     "physical_count_reference":data.verification_ref.strip() if imported else None,
+                     "physical_count_date":data.physical_count_date if imported else None,
+                     "source":"PHYSICAL_COUNT_DECLARED" if imported else "DEMO_PRODUCT"})
+    return {"product_id":pid,"stock_qty":data.stock_qty,
+            "verification_recorded":imported}
 @app.post("/v1/inquiries",status_code=201)
 def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get_db)):
     with db:
@@ -197,14 +221,13 @@ def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get
         audit(db,u,"NEW_INQUIRY","inquiry",cur.lastrowid,after={"status":"NEW","requirement_recorded":True})
     return {"id":cur.lastrowid,"status":"NEW"}
 @app.get("/v1/inquiries")
-def inquiries(u=Depends(current),db=Depends(get_db)):
+def inquiries(u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
+    # Warehouse only has catalog/stock authority; inquiry metadata (IDs/status)
+    # are also restricted, not merely the free-text customer requirement.
     sql="SELECT * FROM inquiries";params=()
     if u["role"]=="sales":
         sql+=" WHERE created_by=?";params=(u["id"],)
-    records=[dict(x) for x in db.execute(sql+" ORDER BY id DESC",params).fetchall()]
-    if u["role"]=="gudang":
-        for x in records:x.pop("requirement",None);x.pop("customer_ref",None)
-    return records
+    return [dict(x) for x in db.execute(sql+" ORDER BY id DESC",params).fetchall()]
 @app.post("/v1/inquiries/{iid}/match")
 def match(iid:int,u=Depends(permit("sales","admin","technical")),db=Depends(get_db)):
     q=db.execute("SELECT * FROM inquiries WHERE id=?",(iid,)).fetchone()
@@ -253,7 +276,19 @@ def latest_match(iid:int,u=Depends(permit("admin","sales","technical","manager")
        (SELECT v.label FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_relevance,
        (SELECT v.note FROM reviews v WHERE v.run_id=c.run_id AND v.product_id=c.product_id ORDER BY v.id DESC LIMIT 1) AS expert_note
        FROM candidates c JOIN products p ON p.id=c.product_id WHERE c.run_id=? ORDER BY c.rank""",(run["id"],)).fetchall()
-    candidates=[dict(r) for r in rows]
+    from research.catalog_matcher import _product_form
+    candidates=[]
+    for row in rows:
+        item=dict(row)
+        item["product_form"]=_product_form(item) or "UNKNOWN"
+        decision=item["expert_decision"]
+        label=item["expert_relevance"]
+        item["historical_review_conflict"]=bool(
+            (decision=="ACCEPT" and label!=3) or
+            (decision=="REJECT" and label==3) or
+            (label==0 and decision not in (None,"REJECT"))
+        )
+        candidates.append(item)
     return {"inquiry_id":iid,"status":q["status"],"run_id":run["id"],"method":run["method"],
             "latency_ms":run["latency_ms"],"candidates":candidates,
             "insight":inquiry_insight(q["requirement"],candidates,run["method"],q["status"]),
