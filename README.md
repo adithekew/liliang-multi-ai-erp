@@ -2,7 +2,17 @@
 
 Five-role internal ERP research pilot: Admin, Sales, Technical, Manager Operasional, Gudang.
 
-**Status:** Render Free demo, *not production*. Synthetic product and sales history only. Repo is currently public; no company data or secrets belong here.
+**Status:** Render Free research pilot, *not production*. A supplier-PDF catalog has been imported to a private Neon database but remains UNVERIFIED; AI-03/04 demonstrations are synthetic, and 2025 sales history has only been extracted pending Finance reconciliation. This public repository must never include company datasets or secrets.
+
+## Capstone Weekly Update — 23 Oktober 2026
+
+Materi paparan IT40513 untuk Kelompok 3 (22 slide) dan bukti kegiatan 16–23 Oktober 2026 sudah disiapkan dalam [**laporan mingguan + tautan pengumpulan Google Drive**](docs/CAPSTONE_WEEKLY_UPDATE_2026-10-23.md).
+
+- [PPTX asli (editable)](https://docs.google.com/presentation/d/1n0TulHPVLWHUBMm-gmALBJEQCoIUE2VR/edit) dan [PDF asli](https://drive.google.com/file/d/1qDwD0oGrw8mgf_-JT1KLcU00NQ4sRSBM/view)
+- [Google Slides 22 slide yang dapat diedit online](https://docs.google.com/presentation/d/1sao9LQOE8YcBKOpIp60idlk0qL2SR2vWuB6BBT9j8Zs/edit)
+- [Panduan presenter](https://drive.google.com/file/d/1ug2j7r1pQ1i943TYPfuYMroyv0CNg3vI/view) dan [catatan pembicara](https://docs.google.com/document/d/1hGOjirRWTnCoQe9Y9Z7kfDCMfxVGgbTiGShFSZdFW-o/edit)
+
+**Status akademik:** UAT operasional dan CI telah menghasilkan bukti fungsional. MiniLM belum menjalankan inferensi online pada katalog penuh; AI-03/04 masih sintetis; data sales 2025 telah diekstraksi tetapi perlu rekonsiliasi; tidak ada klaim presisi AI yang tervalidasi.
 
 ## v0.5 — Research evidence, data quality and supervised-training readiness
 
