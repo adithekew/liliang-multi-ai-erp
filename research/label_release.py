@@ -62,10 +62,17 @@ def adjudicate(rows_a,rows_b,adjudication_rows):
         reviewed[pid]["adjudicated"]=pid in resolved
     return reviewed,review
 
-def split_for_group(group,seed):
-    # Stable even when input order changes, and groups never cross partitions.
-    h=int(hashlib.sha256((seed+"|"+group).encode()).hexdigest()[:12],16)%100
-    return "train" if h<70 else ("dev" if h<85 else "test")
+def assign_splits(groups,seed):
+    # Frozen-corpus deterministic group shuffle: unlike naive hash thresholds,
+    # guarantees a dev/test partition exists when >=3 groups are supplied.
+    unique=sorted(set(groups),key=lambda g:hashlib.sha256((seed+"|"+g).encode()).hexdigest())
+    n=len(unique)
+    if n<3:
+        raise ValueError("At least three independent groups required for a heldout split")
+    test_n=max(1,round(n*.15))
+    dev_n=max(1,round(n*.15))
+    return {g:("test" if i<test_n else "dev" if i<test_n+dev_n else "train")
+            for i,g in enumerate(unique)}
 
 def build_release(pool,rows_a,rows_b,adj,authorization_hash,seed="liliang-ai02-research-v1"):
     if len(seed)<8:raise ValueError("Split seed too short")
@@ -88,6 +95,7 @@ def build_release(pool,rows_a,rows_b,adj,authorization_hash,seed="liliang-ai02-r
         pairs[pid]=p
     if set(pairs)!=set(graded):
         raise ValueError("Technical reviewed pairs and task pool must match exactly")
+    group_splits=assign_splits((str(p["project_group"]).strip().upper() for p in pairs.values()),seed)
     datasets={"train":[],"dev":[],"test":[]}
     all_qrels={"train":[],"dev":[],"test":[]}
     pair_groups={}
@@ -97,7 +105,7 @@ def build_release(pool,rows_a,rows_b,adj,authorization_hash,seed="liliang-ai02-r
             if str(p[key]).strip().upper()!=str(expert[key]).strip().upper():
                 raise ValueError("Pool metadata and Technical reviewer metadata mismatch: "+key)
         group=str(p["project_group"]).strip().upper()
-        split=split_for_group(group,seed)
+        split=group_splits[group]
         pair_groups[pid]=split
         qrel={"pair_id":pid,"query_id":str(p["inquiry_id"]),"project_group":group,
               "query":str(p["query"]),"sku":str(p["sku"]).upper(),
