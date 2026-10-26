@@ -68,7 +68,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // Only the short-lived JWT is in tab-scoped sessionStorage. No SKU, inquiry,
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
- hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",
+ hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",
  overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
@@ -181,6 +181,7 @@ const menu=[
  ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
  ["research","▤","AI Research Evidence","AI MODULES"],
  ["systems","◉","AI System Status","AI MODULES"],
+ ["datareadiness","☑","AI Demo & Data Readiness","AI MODULES"],
  ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
@@ -196,7 +197,7 @@ function allowed(key){
  if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
  if(key==="reports")return true;
  if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
- if(key==="research")return ["admin","technical","manager"].includes(me.role);
+ if(key==="research"||key==="datareadiness")return ["admin","technical","manager"].includes(me.role);
  if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
  if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
@@ -208,7 +209,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<a class="navitem '+(page===x[0]?"active":"")+'" href="'+PAGE_URLS[x[0]]+'"><span>'+x[1]+'</span>'+x[2]+'</a>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand official-brand"><img class="official-sidebar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div class="official-brand-caption">ERP · MULTI-AI</div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div class="topbar-official"><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><img class="official-topbar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Historis penjualan untuk bundling/forecast masih sintetis. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand official-brand"><img class="official-sidebar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div class="official-brand-caption">ERP · MULTI-AI</div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div class="topbar-official"><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><img class="official-topbar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Demo AI-03/04 menggunakan data sintetis; analitik dari order perusahaan yang terdaftar dipisahkan secara eksplisit. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  // Sidebar links now trigger distinct HTTP GET pages (supports deep links & refresh).
 }
 function toggleMenu(){$("side").classList.toggle("open")}
@@ -220,7 +221,7 @@ async function enter(){
 }
 function navigate(p){if(!allowed(p)||!PAGE_URLS[p])return;window.location.assign(PAGE_URLS[p])}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="datareadiness")await aiDataReadiness();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -477,6 +478,77 @@ async function aiSystemStatus(){
  (qc?'<div class="card"><h2>Live Catalog Quality Smoke (NOT Scientific Accuracy)</h2><p class="sub">Pemeriksaan kesesuaian nama rasa/bentuk pada katalog aktif: '+qc.constraints_passed+' / '+qc.constraints_total+' kasus developer-defined. Hasil ini bukan Precision@5, bukan bukti pakar dan tidak menunjukkan kelayakan formulasi.</p><div class="tablewrap"><table><tr><th>Test Case</th><th>Expected Flavor</th><th>Top Candidate</th><th>Constraint</th></tr>'+qc.scenarios.map(x=>'<tr><td>'+escapeHtml(x.case)+'</td><td>'+escapeHtml(x.requirement)+'</td><td>'+escapeHtml(x.top_name||"NO MATCH")+'</td><td>'+escapeHtml(x.constraint_consistency)+'</td></tr>').join("")+'</table></div></div>':'')+
  '<div class="grid two"><div class="card"><h2>AI-02 Research Workflow</h2><p class="sub">Pretrained neural vectors: GitHub Actions offline → versioned synthetic fixtures → cosine dense ranking → RRF hybrid fusion. FastAPI receives new arbitrary inquiries but currently ranks them with BM25 only.</p><button class="btn" onclick="navigate(\'hybrid\')">Test Precomputed Neural Demo</button></div><div class="card"><h2>Still Pending Before Research/Production</h2>'+status.limitations.map(s=>'<p class="small">• '+escapeHtml(s)+'</p>').join("")+'<button class="btn secondary" onclick="navigate(\'research\')">Review Scientific Readiness</button></div></div>';
 }
+async function aiDataReadiness(){
+ const d=await api("/v1/ai/demo-readiness");
+ const status=(ok)=>'<span class="tag '+(ok?"":"unknown")+'">'+(ok?"DEMO PASS":"NEEDS CHECK")+'</span>';
+ const rows=d.modules.map(x=>'<tr><td><b>'+escapeHtml(x.id)+'</b></td><td>'+escapeHtml(x.mode)+'</td><td>'+status(x.status!=="ATTENTION")+'</td><td>'+escapeHtml(x.note)+'</td></tr>').join("");
+ const facts=d.company_fact_readiness;
+ const factRows=[
+  ["Orders saved",facts.stored_order_count],["Eligible orders",facts.eligible_order_count],
+  ["Bundling minimum met",facts.bundling_ready?"YES":"NO"],
+  ["Forecast-ready SKUs",facts.forecast_ready_sku_count]
+ ].map(x=>'<div class="card"><div class="kpi-lbl">'+x[0]+'</div><div class="kpi">'+escapeHtml(x[1])+'</div></div>').join("");
+ $("view").innerHTML=headline("AI / DEMO CONTROL","Demo Readiness & Dataset Governance",
+ "Preflight membaca kondisi aplikasi tanpa mengubah data perusahaan. PASS hanya berarti pemeriksaan fungsional, bukan akurasi ilmiah.")+
+ '<div class="warning"><strong>'+escapeHtml(d.demo_preflight_pass?"AI DEMO FUNCTIONAL SMOKE: PASS":"PERLU PEMERIKSAAN SEBELUM DEMO")+
+ '</strong> · Company-trained and validated models: NO. AI-03/04 synthetic mode is separate from company-attested order data. Live visual UAT tetap diperlukan.</div>'+
+ '<div class="card"><div class="toolbar"><h2>Status seluruh AI</h2><button class="btn secondary" onclick="aiDataReadiness()">Periksa ulang</button></div>'+
+ '<div class="tablewrap"><table><tr><th>Modul</th><th>Mode Eksekusi</th><th>Smoke</th><th>Catatan</th></tr>'+rows+'</table></div></div>'+
+ '<div class="toolbar"><h2>AI-03 & AI-04 — Kesiapan Transaksi Riil</h2><span class="tag unknown">COMPANY ATTESTED ≠ VERIFIED BY FINANCE</span></div>'+
+ '<div class="grid">'+factRows+'</div>'+
+ '<div class="card"><h2>Aturan kualitas data</h2><p class="small">AI-03 membutuhkan ≥10 order selesai/terkonfirmasi yang berbeda, beserta pasangan SKU asli. AI-04 membutuhkan ≥8 minggu penjualan berurutan yang benar-benar tercatat untuk SKU yang diprediksi. Minggu yang hilang tidak dianggap nol. Tidak ada auto-selling, retraining, atau pemesanan otomatis.</p>'+
+ '<div class="actions"><button class="btn secondary" onclick="navigate(\'bundling\')">AI-03 Synthetic Demo</button><button class="btn secondary" onclick="navigate(\'forecast\')">AI-04 Synthetic Demo</button>'+
+ '<button class="btn" onclick="runCompanyBundling()">Lihat Aturan dari Data Perusahaan</button></div><div id="companyRules"></div>'+
+ '<div style="margin-top:15px"><label>Forecast dari data perusahaan (SKU)</label><div class="actions"><input id="companySku" placeholder="SKU asli dari katalog" maxlength="80" style="max-width:280px"><button class="btn" onclick="runCompanyForecast()">Periksa Prediksi Riil</button></div></div><div id="companyForecast"></div></div>'+
+ (me.role==="admin"?'<div class="card"><h2>Admin: Impor Sales Facts dengan Dokumen Asli</h2>'+
+ '<p class="note">PENTING: hanya gunakan dokumen perusahaan yang telah diberikan izin dan diperiksa Finance. Jangan unggah file Excel mentah, data customer, atau UAT sintetis. File JSON berisi orders:[{order_ref, order_date, status, lines:[{sku,qty}]}]. Semua jumlah harus pada satuan yang konsisten. Tidak ada reset/update: order_ref unik dan append-only.</p>'+
+ '<label>Nomor register dokumen sumber</label><input id="aiFactRef" placeholder="FIN-REGISTER-2026-001" maxlength="100">'+
+ '<label>File JSON berisi hanya order teranonimkan</label><input type="file" id="aiFactFile" accept=".json,application/json">'+
+ '<div class="actions"><button class="btn" onclick="submitAISalesFacts()">Impor hanya data yang sudah diaudit</button>'+
+ '<button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_sales_facts\',\'csv\')">CSV Register</button></div><div id="aiImportStatus"></div></div>':"")+
+ '<div class="card"><h2>Poin Verifikasi Demo Terakhir</h2><p class="small">1. Login tiap role; 2. Inquiry baru Sales; 3. Matching tersimpan sekali; 4. Technical review label 0–3; 5. Manager approval; 6. Gudang tidak melihat inquiry; 7. AI-03/AI-04 demo tetap dipisah dari sumber perusahaan; 8. Semua laporan ekspor tersedia.</p>'+
+ '<p class="note">Siapkan 1–2 skenario contoh anonim dan screenshot cadangan. Hindari klaim zero-bug atau akurasi AI sebelum UAT dengan data perusahaan berizin.</p></div>';
+}
+async function runCompanyBundling(){
+ try{const d=await api("/v1/ai/bundling-company");
+  const holder=$("companyRules");
+  if(!holder)return;
+  holder.innerHTML='<div class="note"><b>Status:</b> '+escapeHtml(d.status)+' · '+escapeHtml(d.basket_count)+' order eligible.</div>'+
+   (d.rules?.length?'<div class="tablewrap"><table><tr><th>SKU A</th><th>SKU B</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+
+      d.rules.map(x=>'<tr><td>'+escapeHtml(x.antecedent_sku)+'</td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.support+'</td><td>'+x.confidence+'</td><td>'+x.lift+'</td></tr>').join("")+'</table></div>':'<p class="small">Data belum mencukupi atau tidak ada aturan sesuai ambang. Tidak mengambil hasil synthetic sebagai pengganti.</p>')+
+    '<button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_bundling_company\',\'pdf\')">Report PDF</button>';
+ }catch(e){fail(e)}
+}
+async function runCompanyForecast(){
+ try{
+ const sku=String($("companySku")?.value||"").trim().toUpperCase();
+ if(sku.length<3){toast("Masukkan SKU riil dengan benar",true);return}
+ const d=await api("/v1/ai/forecast-company?sku="+encodeURIComponent(sku)+"&horizon=4");
+ $("companyForecast").innerHTML='<div class="note"><b>SKU '+escapeHtml(sku)+'</b> · '+escapeHtml(d.status)+
+   ' · '+escapeHtml(d.reason||d.method||"")+'</div>'+
+ (d.forecast?.length?'<div class="tablewrap"><table><tr><th>Week</th><th>Prediction (same unit as source)</th></tr>'+
+    d.forecast.map(x=>'<tr><td>'+escapeHtml(x.week)+'</td><td>'+escapeHtml(x.predicted_units)+'</td></tr>').join("")+
+   '</table></div><p class="note">Backtest WMAPE: '+escapeHtml(d.metrics?.rolling_wmape_pct)+'% pada data tercatat; belum validasi independen.</p>':"")+
+ '<button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_forecast_company\',\'pdf\')">Report Kesiapan Forecast</button>';
+ }catch(e){fail(e)}
+}
+async function submitAISalesFacts(){
+ const out=$("aiImportStatus");const input=$("aiFactFile");const doc=$("aiFactRef").value.trim();
+ if(!input.files?.length||doc.length<8){toast("File JSON dan nomor dokumen sumber wajib diisi",true);return}
+ try{
+  const parsed=JSON.parse(await input.files[0].text());
+  if(!Array.isArray(parsed.orders)||!parsed.orders.length){throw Error("JSON wajib mempunyai array orders non-kosong")}
+  if(parsed.orders.length>200){throw Error("Maksimum 200 order per batch")}
+  if(!confirm("Konfirmasi: "+parsed.orders.length+" order benar-benar berasal dari dokumen perusahaan berizin, telah disamarkan, dan bukan data simulasi/UAT?"))return;
+  const r=await api("/v1/admin/ai-sales-facts/import","POST",{
+    confirmation:"IMPORT COMPANY ATTESTED SALES FACTS",source_document_ref:doc,
+    source_authorized:true,orders:parsed.orders
+  });
+  out.innerHTML='<p class="note">Import selesai: '+escapeHtml(r.orders)+' order, '+escapeHtml(r.lines)+' item. Data disimpan sebagai COMPANY_ATTESTED (bukan akurasi AI).</p>';
+  await aiDataReadiness();
+ }catch(e){fail(e);if(out)out.textContent="Import dibatalkan/gagal: "+e.message}
+}
+
 async function researchEvidence(){
  const [m,r,e,q,training]=await Promise.all([
     api("/v1/research/methodology"),api("/v1/research/readiness"),api("/v1/research/evaluation"),api("/v1/research/quality-demo"),api("/v1/research/training-readiness")
