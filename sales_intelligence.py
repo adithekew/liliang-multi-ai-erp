@@ -183,7 +183,7 @@ def readiness(db):
 class ProxyGroup(BaseModel):
     group_id: str=Field(min_length=3,max_length=80)
     month: str=Field(pattern=r"^2025-(0[1-9]|1[0-2])$")
-    skus: list[str]=Field(min_length=1,max_length=100)
+    skus: list[str]=Field(min_length=1,max_length=20)  # limit pair-count amplification
 
 class ProxyPreview(BaseModel):
     assumption: Literal["USER_ASSUMED_CO_PURCHASE_PROXY"]
