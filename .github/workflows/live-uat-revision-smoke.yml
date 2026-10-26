@@ -37,7 +37,9 @@ jobs:
             "stock count evidence": "physical_count_date",
             "AI Data Readiness navigation": 'datareadiness:"/ai/data-readiness"',
             "AI Demo Preflight UI": "async function aiDataReadiness()",
-            "Protected order import": "/v1/admin/ai-sales-facts/import"
+            "Protected order import": "/v1/admin/ai-sales-facts/import",
+            "independent company model gates": "async function aiDataReadiness()",
+            "research guard reference": "/v1/research/company-data-gates"
           }
           def fetch(path):
               req=Request(base+path,headers={"User-Agent":"Liliang-UAT-Revision-Smoke/1.0",
