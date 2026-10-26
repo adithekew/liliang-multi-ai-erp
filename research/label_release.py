@@ -11,7 +11,7 @@ from collections import Counter,defaultdict
 from pathlib import Path
 from research.technical_independent_agreement import validate,agreement
 from research.training_gate import check_training_pairs
-from research.data_pipeline import likely_sensitive
+from research.data_pipeline import likely_sensitive,normalize
 
 MIN_HELDOUT_QUERIES=5
 
@@ -128,6 +128,12 @@ def build_release(pool,rows_a,rows_b,adj,authorization_hash,seed="liliang-ai02-r
     for split,rows in all_qrels.items():
         for x in rows:query_splits[x["query_id"]].add(split)
     if any(len(x)>1 for x in query_splits.values()):errors.append("INQUIRY_LEAKAGE")
+    normalized_text_splits=defaultdict(set)
+    for split,rows in all_qrels.items():
+        for row in rows:
+            normalized_text_splits[normalize(row["query"])].add(split)
+    if any(len(v)>1 for v in normalized_text_splits.values()):
+        errors.append("NORMALIZED_QUERY_TEXT_LEAKAGE")
     # Qualified 0..3 judgment pool: do not count unlabeled catalog entries as 0.
     if any(len({x["sku"] for x in rows if x["query_id"]==qid})<2
            for split,rows in all_qrels.items()
@@ -178,8 +184,9 @@ def main():
     def write_rows(name,rows):
         with (out/name).open("x",encoding="utf-8") as f:
             for x in rows:f.write(json.dumps(x,ensure_ascii=False)+"\n")
-    for split in ("train","dev","test"):
+    for split in ("train","dev"):
         write_rows(split+"_positives.jsonl",train[split])
+    for split in ("train","dev","test"):
         write_rows(split+"_judged_qrels.jsonl",judged[split])
     manifest["release_file_sha256"]={f.name:sha(f) for f in out.glob("*.jsonl")}
     (out/"release_manifest.json").write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+"\n")
