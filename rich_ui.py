@@ -505,6 +505,8 @@ async function aiDataReadiness(){
  (me.role==="technical"?'<p class="note">Technical: bagian operasional Sales/Forecast dibatasi berdasarkan role. Pantau readiness di atas atau buka AI-02 Research Evidence.</p>':
  '<div class="actions"><button class="btn secondary" onclick="navigate(\'bundling\')">AI-03 Synthetic Demo</button><button class="btn secondary" onclick="navigate(\'forecast\')">AI-04 Synthetic Demo</button>'+
  '<button class="btn" onclick="runCompanyBundling()">Lihat Aturan dari Data Perusahaan</button></div><div id="companyRules"></div>'+
+ '<div class="note"><b>Eksperimen 2025 tanpa Juni:</b> Jika source penjualan hanya berisi grup produk tanpa invoice, unggah JSON proxy basket untuk menghitung asosiasi sementara tanpa menyimpan data ke Neon. Hasil tidak berstatus invoice-verified.</div>'+
+ '<div class="actions"><input type="file" id="aiProxyFile" accept=".json,application/json"><button class="btn secondary" onclick="runProxyPreview()">Preview Proxy Basket (Juni Dikecualikan)</button></div><div id="aiProxyResult"></div>'+
  '<div style="margin-top:15px"><label>Forecast dari data perusahaan (SKU)</label><div class="actions"><input id="companySku" placeholder="SKU asli dari katalog" maxlength="80" style="max-width:280px"><button class="btn" onclick="runCompanyForecast()">Periksa Prediksi Riil</button></div></div><div id="companyForecast"></div>')+'</div>'+
  (me.role==="admin"?'<div class="card"><h2>Admin: Impor Sales Facts dengan Dokumen Asli</h2>'+
  '<p class="note">PENTING: hanya gunakan dokumen perusahaan yang telah diberikan izin dan diperiksa Finance. Jangan unggah file Excel mentah, data customer, atau UAT sintetis. File JSON berisi orders:[{order_ref, order_date, status, lines:[{sku,qty}]}]. Semua qty wajib kilogram (unit: "KG"), konversi dari satuan sumber harus disimpan di register Finance. Tidak ada reset/update: order_ref unik dan append-only.</p>'+
@@ -514,6 +516,20 @@ async function aiDataReadiness(){
  '<button class="btn secondary" onclick="downloadReport(\'/v1/reports/ai_sales_facts\',\'csv\')">CSV Register</button></div><div id="aiImportStatus"></div></div>':"")+
  '<div class="card"><h2>Poin Verifikasi Demo Terakhir</h2><p class="small">1. Login tiap role; 2. Inquiry baru Sales; 3. Matching tersimpan sekali; 4. Technical review label 0–3; 5. Manager approval; 6. Gudang tidak melihat inquiry; 7. AI-03/AI-04 demo tetap dipisah dari sumber perusahaan; 8. Semua laporan ekspor tersedia.</p>'+
  '<p class="note">Siapkan 1–2 skenario contoh anonim dan screenshot cadangan. Hindari klaim zero-bug atau akurasi AI sebelum UAT dengan data perusahaan berizin.</p></div>';
+}
+async function runProxyPreview(){
+ const inp=$("aiProxyFile"),target=$("aiProxyResult");
+ if(!inp?.files?.length){toast("Pilih JSON proxy basket dari data 2025 yang sudah disamarkan",true);return}
+ try{
+  const data=JSON.parse(await inp.files[0].text());
+  if(data.assumption!=="USER_ASSUMED_CO_PURCHASE_PROXY"||data.acknowledge_not_invoice_verified!==true)
+   throw Error("File harus diberi klasifikasi asumsi dan bukan invoice tervalidasi");
+  const result=await api("/v1/ai/bundling-proxy-preview","POST",data);
+  target.innerHTML='<div class="warning">EXPLORATORY — NOT VERIFIED SAME INVOICE. Tidak tersimpan ke database. Grup: '+result.eligible_proxy_groups+
+  ', grup multi-SKU: '+result.multi_sku_groups+', aturan: '+result.rule_count+', Juni dikecualikan: '+result.excluded_june_groups+'.</div>'+
+  (result.rules?.length?'<div class="tablewrap"><table><tr><th>SKU A</th><th>SKU B</th><th>Jumlah grup</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>'+
+   result.rules.map(x=>'<tr><td>'+escapeHtml(x.antecedent_sku)+'</td><td>'+escapeHtml(x.recommended_sku)+'</td><td>'+x.proxy_co_groups+'</td><td>'+x.support+'</td><td>'+x.confidence+'</td><td>'+x.lift+'</td></tr>').join("")+'</table></div>':"");
+ }catch(e){fail(e);if(target)target.textContent="Preview gagal: "+e.message}
 }
 async function runCompanyBundling(){
  try{const d=await api("/v1/ai/bundling-company");
