@@ -31,6 +31,10 @@ class PostgresIntegrationTest(unittest.TestCase):
 
             for path in [
                 "/v1/ai/capabilities",
+                "/v1/ai/demo-readiness",
+                "/v1/ai/sales-readiness",
+                "/v1/ai/bundling-company",
+                "/v1/ai/forecast-company?sku=FLV-STRAW-01",
                 "/v1/ai/bundling",
                 "/v1/ai/forecast?sku=FLV-STRAW-01&horizon=4",
                 "/v1/ai/hybrid-cases",
