@@ -368,6 +368,8 @@ from sales_intelligence import mount_sales_intelligence
 mount_sales_intelligence(app,current,get_db,audit)
 from demo_readiness import mount_demo_readiness
 mount_demo_readiness(app,current,get_db)
+from company_model_governance import mount_company_governance
+mount_company_governance(app,current,get_db)
 from research.evidence import mount_research
 mount_research(app,current,get_db)
 from enterprise_ops import mount_enterprise
