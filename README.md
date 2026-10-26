@@ -4,6 +4,17 @@ Five-role internal ERP research pilot: Admin, Sales, Technical, Manager Operasio
 
 **Status:** Render Free research pilot, *not production*. A supplier-PDF catalog has been imported to a private Neon database but remains UNVERIFIED; AI-03/04 demonstrations are synthetic, and 2025 sales history has only been extracted pending Finance reconciliation. This public repository must never include company datasets or secrets.
 
+## Capstone P7 — 26 Oktober 2026 (feature branch, not yet live)
+
+A new **Learning & Adoption Center** (`/learning/center`) is prepared as a *read-only UX prototype* for the Aswaya P7 rubric: five-role learning journey, skills matrix, formative browser-only 3-question quiz, draft pre/post-test, and **not-yet-measured** learning/adoption KPI definitions. It does **not** write user learning progress or change Neon, production stock, company sales data, or model weights.
+
+- [P7 academic milestone, evidence matrix and Drive files](docs/CAPSTONE_P7_LEARNING_ADOPTION_20261026.md)
+- [P7 presenter script and safe demo SOP](docs/P7_PRESENTATION_AND_DEMO_SOP_20261026.md)
+- [21-slide editable deck](https://docs.google.com/presentation/d/1dDFkZJ1zdFq8EDzgLDFdnCMrW3d5ughA/edit)
+- [P7 class submission folder](https://drive.google.com/drive/folders/1gbiNBG8ejF-LTObMGJg9-kmQ30GVWrRx)
+
+**Scientific gate unchanged:** PR #22–25 have been merged for source governance and independent AI-02 evaluation infrastructure. June 2025 is excluded from company sales experiments, user-assumed proxy baskets are not invoice-validated orders, and no independently judged company model accuracy has been produced. Feature availability on Render requires CI, PR merge, deployment verification and interactive role-based UAT.
+
 ## Capstone Weekly Update — 23 Oktober 2026
 
 Materi paparan IT40513 untuk Kelompok 3 (22 slide) dan bukti kegiatan 16–23 Oktober 2026 sudah disiapkan dalam [**laporan mingguan + tautan pengumpulan Google Drive**](docs/CAPSTONE_WEEKLY_UPDATE_2026-10-23.md).
