@@ -497,9 +497,10 @@ async function aiDataReadiness(){
  '<div class="toolbar"><h2>AI-03 & AI-04 — Kesiapan Transaksi Riil</h2><span class="tag unknown">COMPANY ATTESTED ≠ VERIFIED BY FINANCE</span></div>'+
  '<div class="grid">'+factRows+'</div>'+
  '<div class="card"><h2>Aturan kualitas data</h2><p class="small">AI-03 membutuhkan ≥10 order selesai/terkonfirmasi yang berbeda, beserta pasangan SKU asli. AI-04 membutuhkan ≥8 minggu penjualan berurutan yang benar-benar tercatat untuk SKU yang diprediksi. Minggu yang hilang tidak dianggap nol. Tidak ada auto-selling, retraining, atau pemesanan otomatis.</p>'+
+ (me.role==="technical"?'<p class="note">Technical: bagian operasional Sales/Forecast dibatasi berdasarkan role. Pantau readiness di atas atau buka AI-02 Research Evidence.</p>':
  '<div class="actions"><button class="btn secondary" onclick="navigate(\'bundling\')">AI-03 Synthetic Demo</button><button class="btn secondary" onclick="navigate(\'forecast\')">AI-04 Synthetic Demo</button>'+
  '<button class="btn" onclick="runCompanyBundling()">Lihat Aturan dari Data Perusahaan</button></div><div id="companyRules"></div>'+
- '<div style="margin-top:15px"><label>Forecast dari data perusahaan (SKU)</label><div class="actions"><input id="companySku" placeholder="SKU asli dari katalog" maxlength="80" style="max-width:280px"><button class="btn" onclick="runCompanyForecast()">Periksa Prediksi Riil</button></div></div><div id="companyForecast"></div></div>'+
+ '<div style="margin-top:15px"><label>Forecast dari data perusahaan (SKU)</label><div class="actions"><input id="companySku" placeholder="SKU asli dari katalog" maxlength="80" style="max-width:280px"><button class="btn" onclick="runCompanyForecast()">Periksa Prediksi Riil</button></div></div><div id="companyForecast"></div>')+'</div>'+
  (me.role==="admin"?'<div class="card"><h2>Admin: Impor Sales Facts dengan Dokumen Asli</h2>'+
  '<p class="note">PENTING: hanya gunakan dokumen perusahaan yang telah diberikan izin dan diperiksa Finance. Jangan unggah file Excel mentah, data customer, atau UAT sintetis. File JSON berisi orders:[{order_ref, order_date, status, lines:[{sku,qty}]}]. Semua jumlah harus pada satuan yang konsisten. Tidak ada reset/update: order_ref unik dan append-only.</p>'+
  '<label>Nomor register dokumen sumber</label><input id="aiFactRef" placeholder="FIN-REGISTER-2026-001" maxlength="100">'+
