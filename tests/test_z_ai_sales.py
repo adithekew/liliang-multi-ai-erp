@@ -37,7 +37,7 @@ class SalesFactAITests(unittest.TestCase):
                         "confirmation":"IMPORT COMPANY ATTESTED SALES FACTS",
                         "source_document_ref":"DOC-2026-001","source_authorized":True,
                         "orders":[{"order_ref":"SRC-TEST-1","order_date":"2026-01-05",
-                             "status":"FULFILLED","lines":[{"sku":"NOT-IN-CATALOG","qty":3}]}]})
+                             "status":"FULFILLED","lines":[{"sku":"NOT-IN-CATALOG","qty":3,"unit":"KG"}]}]})
                     self.assertEqual(invalid.status_code,422)
                     with connect() as db:
                         self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM ai_sales_orders").fetchone()["n"],0)
@@ -47,8 +47,8 @@ class SalesFactAITests(unittest.TestCase):
                         orders.append({"order_ref":f"DOCTEST-{i:03d}",
                             "order_date":(d+timedelta(weeks=i)).isoformat(),
                             "status":"FULFILLED",
-                            "lines":[{"sku":"FLV-STRAW-01","qty":40+i},
-                                     {"sku":"FLV-VANI-02","qty":20+i}]})
+                            "lines":[{"sku":"FLV-STRAW-01","qty":40+i,"unit":"KG"},
+                                     {"sku":"FLV-VANI-02","qty":20+i,"unit":"KG"}]})
                     body={"confirmation":"IMPORT COMPANY ATTESTED SALES FACTS",
                           "source_document_ref":"FIN-REGISTER-2026-001",
                           "source_authorized":True,"orders":orders}
