@@ -30,7 +30,10 @@ CATALOG={
  "ai_hybrid":("AI-02 MiniLM + RRF Fixed Synthetic Lab",("admin","sales","technical","manager")),
  "ai_bundling":("AI-03 Product Bundling - Synthetic Baseline",("admin","sales","manager")),
  "ai_forecast":("AI-04 Demand Forecast - Synthetic Baseline",("admin","sales","manager","gudang")),
- "ai_research":("AI-02 Research Evidence Readiness",("admin","technical","manager"))
+ "ai_research":("AI-02 Research Evidence Readiness",("admin","technical","manager")),
+ "ai_sales_facts":("AI Data — Sales Facts Import Register",("admin",)),
+ "ai_bundling_company":("AI-03 — Company Attested Basket Rules",("admin","sales","manager")),
+ "ai_forecast_company":("AI-04 — Company Attested Forecast Readiness",("admin","sales","manager","gudang"))
 }
 HEADERS={
  "inquiries":["ID","Customer Reference","Requirement","Status","Created At","Created By"],
@@ -44,7 +47,10 @@ HEADERS={
  "ai_hybrid":["Query ID","Neural Model","Embedding Dimension","Data Source","Scientific Validation"],
  "ai_bundling":["SKU A","SKU B","Basket Count","Support","Confidence","Lift"],
  "ai_forecast":["Week","Historical","Forecast","SKU"],
- "ai_research":["Metric","Value"]
+ "ai_research":["Metric","Value"],
+ "ai_sales_facts":["Order Reference","Order Date","Status","SKU","Qty","Document Reference"],
+ "ai_bundling_company":["SKU A","SKU B","Order Count","Support","Confidence","Lift"],
+ "ai_forecast_company":["SKU","Observed Weeks","Readiness Status","MAE","WMAPE %","Evidence Class"]
 }
 NO_STORE={"Cache-Control":"private, no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache"}
 
@@ -140,6 +146,32 @@ def report_rows(kind,user,db,limit=500):
         for x in data.get("history",[]):values.append([x["week"],x["units"],None,"FLV-STRAW-01"])
         for x in data.get("forecast",[]):values.append([x["week"],None,x["predicted_units"],"FLV-STRAW-01"])
         values=values[:limit];source="SYNTHETIC_DEMAND_NOT_COMPANY_SALES"
+    elif kind=="ai_sales_facts":
+        rows=db.execute("""SELECT o.order_ref,o.order_date,o.status,l.sku,l.qty,o.source_document_ref
+                 FROM ai_sales_orders o JOIN ai_sales_lines l ON l.order_ref=o.order_ref
+                 ORDER BY o.order_date DESC,o.order_ref,l.sku LIMIT ?""",(limit,)).fetchall()
+        values=[[r["order_ref"],r["order_date"],r["status"],r["sku"],r["qty"],
+                 r["source_document_ref"]] for r in rows]
+        source="PRIVATE_COMPANY_ATTESTED_NOT_INDEPENDENTLY_VERIFIED"
+    elif kind=="ai_bundling_company":
+        from sales_intelligence import bundling_actual
+        result=bundling_actual(db)
+        values=[[x.get(k) for k in ("antecedent_sku","recommended_sku","co_occurrences","support","confidence","lift")]
+                for x in result["rules"][:limit]]
+        if result["status"]=="NOT_READY":values=[["NOT_READY",result["basket_count"],result["required_baskets"],None,None,None]]
+        source=result["data_classification"]+"_"+result["status"]
+    elif kind=="ai_forecast_company":
+        from sales_intelligence import readiness,forecasting_actual
+        ready=readiness(db)
+        values=[]
+        for sku in ready["forecast_ready_skus"][:limit]:
+            result=forecasting_actual(db,sku,4)
+            values.append([sku,result.get("weekly_points"),result["status"],
+                           result.get("metrics",{}).get("rolling_mae_units"),
+                           result.get("metrics",{}).get("rolling_wmape_pct"),result["data_classification"]])
+        if not values:
+            values=[["NO_ELIGIBLE_SKU",0,"NOT_READY",None,None,"COMPANY_ATTESTED"]]
+        source="COMPANY_ATTESTED_NOT_SCIENTIFICALLY_VALIDATED"
     else:
         from research.evidence import readiness, methodology
         data=readiness(db)
@@ -154,7 +186,7 @@ def report_rows(kind,user,db,limit=500):
         source="RESEARCH_STATUS_ONLY_NOT_VALIDATED"
     return {"type":kind,"title":CATALOG[kind][0],"source":source,"generated_at":datetime.now(timezone.utc).isoformat(),
             "columns":HEADERS[kind],"rows":values,"count":len(values),
-            "disclaimer":"Research pilot. PDF supplier catalogue remains unverified; AI03/AI04 synthetic and AI02 has no company fine-tuning or validated accuracy."}
+            "disclaimer":"Research pilot: report source is printed in each export. AI03/AI04 synthetic baseline remains isolated from company-attested data; no company-trained model is validated."}
 
 def _safe_paragraph(v,style):
     return Paragraph(escape(scalar(v)).replace("\n","<br/>"),style)
