@@ -364,6 +364,10 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
+from sales_intelligence import mount_sales_intelligence
+mount_sales_intelligence(app,current,get_db,audit)
+from demo_readiness import mount_demo_readiness
+mount_demo_readiness(app,current,get_db)
 from research.evidence import mount_research
 mount_research(app,current,get_db)
 from enterprise_ops import mount_enterprise
@@ -385,6 +389,7 @@ from rich_ui import html_page
 PAGE_ROUTES = {
     "/":"hub", "/workspace":"hub", "/ai/hybrid":"hybrid",
     "/ai/evidence":"research", "/ai/status":"systems",
+    "/ai/data-readiness":"datareadiness",
     "/dashboard":"overview", "/inquiries":"inquiries",
     "/catalog":"catalog", "/sales/bundling":"bundling",
     "/inventory/forecast":"forecast", "/admin/users":"users",
@@ -438,6 +443,7 @@ def index():
 @app.get("/ai/hybrid",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/ai/evidence",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/ai/status",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/ai/data-readiness",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/dashboard",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/inquiries",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/catalog",response_class=HTMLResponse,include_in_schema=False)
