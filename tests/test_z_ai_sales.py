@@ -78,6 +78,24 @@ class SalesFactAITests(unittest.TestCase):
                         output=c.get("/v1/reports/"+kind+"?format=json",headers=headers)
                         self.assertEqual(output.status_code,200,(kind,output.text[:600]))
                         self.assertGreater(len(output.json()["rows"]),0)
+                    # June exclusion must be enforced on an exploratory proxy
+                    # preview, without inserting any orders into the database.
+                    proxy={"assumption":"USER_ASSUMED_CO_PURCHASE_PROXY",
+                           "acknowledge_not_invoice_verified":True,
+                           "groups":[
+                              {"group_id":"SALES-001","month":"2025-09",
+                               "skus":["FLV-STRAW-01","FLV-VANI-02"]},
+                              {"group_id":"SALES-002","month":"2025-09",
+                               "skus":["FLV-STRAW-01","FLV-VANI-02"]},
+                              {"group_id":"JUNE-DUE","month":"2025-06",
+                               "skus":["FLV-MANG-03","FLV-VANI-02"]}]}
+                    preview=c.post("/v1/ai/bundling-proxy-preview",headers=headers,json=proxy)
+                    self.assertEqual(preview.status_code,200,preview.text)
+                    self.assertEqual(preview.json()["excluded_june_groups"],1)
+                    self.assertEqual(preview.json()["eligible_proxy_groups"],2)
+                    self.assertFalse(preview.json()["persisted"])
+                    self.assertFalse(preview.json()["scientific_accuracy_validated"])
+                    self.assertEqual(preview.json()["rules"][0]["proxy_co_groups"],2)
                     # Same endpoint must not imply training success merely because sales exist.
                     again=c.get("/v1/ai/demo-readiness",headers=headers).json()
                     self.assertFalse(again["company_ai_scientifically_validated"])

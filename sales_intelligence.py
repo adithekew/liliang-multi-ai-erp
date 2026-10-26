@@ -180,6 +180,53 @@ def readiness(db):
                "Verified kilogram quantities and source unit conversion evidence","Temporal train/test backtest",
                "Stockout and receipt/lead-time data for replenishment decisions"]}
 
+class ProxyGroup(BaseModel):
+    group_id: str=Field(min_length=3,max_length=80)
+    month: str=Field(pattern=r"^2025-(0[1-9]|1[0-2])$")
+    skus: list[str]=Field(min_length=1,max_length=20)  # limit pair-count amplification
+
+class ProxyPreview(BaseModel):
+    assumption: Literal["USER_ASSUMED_CO_PURCHASE_PROXY"]
+    acknowledge_not_invoice_verified: Literal[True]
+    groups: list[ProxyGroup]=Field(min_length=1,max_length=1000)
+
+def preview_proxy_baskets(payload:ProxyPreview):
+    # Local upload only, not committed as invoice-grade sales facts.
+    basket={}
+    excluded=0
+    for row in payload.groups:
+        if row.month=="2025-06":
+            excluded+=1
+            continue
+        if row.group_id in basket:
+            raise HTTPException(422,"Duplicate proxy group ID")
+        unique={sku.strip().upper() for sku in row.skus if sku.strip()}
+        if not unique or any(len(s)>100 for s in unique):
+            raise HTTPException(422,"Malformed proxy SKU")
+        basket[row.group_id]=unique
+    n=len(basket)
+    if not n:raise HTTPException(422,"No eligible non-June basket groups")
+    from collections import Counter
+    counts=Counter(s for group in basket.values() for s in group)
+    pairs=Counter((a,b) for group in basket.values() for a in group for b in group if a!=b)
+    rules=[]
+    for (a,b),num in pairs.items():
+        support=num/n
+        confidence=num/counts[a]
+        lift=confidence/(counts[b]/n)
+        if num>=2 and support>=.003 and confidence>=.20:
+            rules.append({"antecedent_sku":a,"recommended_sku":b,
+                          "proxy_co_groups":num,"support":round(support,5),
+                          "confidence":round(confidence,5),"lift":round(lift,4)})
+    rules.sort(key=lambda r:(-r["proxy_co_groups"],-r["lift"],r["antecedent_sku"],r["recommended_sku"]))
+    return {"status":"EXPLORATORY_USER_ASSUMED_PROXY_NOT_INVOICE_VERIFIED",
+            "excluded_june_groups":excluded,
+            "eligible_proxy_groups":n,"multi_sku_groups":sum(len(v)>1 for v in basket.values()),
+            "rule_count":len(rules),"rules":rules[:30],
+            "scientific_accuracy_validated":False,
+            "auto_sell":False,"persisted":False,
+            "warning":"Document grouping was assumed to indicate co-purchase. No original invoice ID or order date is verified. These rules are not company-validated historical transaction associations."}
+
 def mount_sales_intelligence(app,current,get_db,audit):
     @app.get("/v1/ai/sales-readiness")
     def sales_ready(u=Depends(current),db=Depends(get_db)):
@@ -224,6 +271,12 @@ def mount_sales_intelligence(app,current,get_db,audit):
         return {"status":"IMPORTED_COMPANY_ATTESTED_NOT_VALIDATED",
                 "orders":len(data.orders),"lines":sum(len(o.lines) for o in data.orders),
                 "note":"Immutable order facts saved to private ERP database; no automatic retraining."}
+
+    @app.post("/v1/ai/bundling-proxy-preview")
+    def proxy_preview(data:ProxyPreview,u=Depends(current)):
+        if u["role"] not in ("admin","manager"):
+            raise HTTPException(403,"Only Admin/Manager can preview unverified commercial groupings")
+        return preview_proxy_baskets(data)
 
     @app.get("/v1/ai/bundling-company")
     def real_bundling(u=Depends(current),db=Depends(get_db)):
