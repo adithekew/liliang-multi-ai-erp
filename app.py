@@ -392,6 +392,7 @@ PAGE_ROUTES = {
     "/":"hub", "/workspace":"hub", "/ai/hybrid":"hybrid",
     "/ai/evidence":"research", "/ai/status":"systems",
     "/ai/data-readiness":"datareadiness",
+    "/learning/center":"learning",
     "/dashboard":"overview", "/inquiries":"inquiries",
     "/catalog":"catalog", "/sales/bundling":"bundling",
     "/inventory/forecast":"forecast", "/admin/users":"users",
@@ -446,6 +447,7 @@ def index():
 @app.get("/ai/evidence",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/ai/status",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/ai/data-readiness",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/learning/center",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/dashboard",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/inquiries",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/catalog",response_class=HTMLResponse,include_in_schema=False)
