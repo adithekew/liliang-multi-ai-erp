@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS reset_archives(id TEXT PRIMARY KEY,actor_id INTEGER,a
 CREATE TABLE IF NOT EXISTS catalog_import_batches(id TEXT PRIMARY KEY,source_sha256 TEXT UNIQUE,source_file TEXT,catalog_version TEXT,items_imported INTEGER,actor_id INTEGER,at TEXT,source_classification TEXT);
 CREATE TABLE IF NOT EXISTS catalog_product_details(sku TEXT PRIMARY KEY,product_type TEXT,application_raw TEXT,composition_raw TEXT,source_page INTEGER,source_number INTEGER,source_sha256 TEXT,batch_id TEXT);
 CREATE TABLE IF NOT EXISTS user_sessions(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,created_at REAL NOT NULL,last_seen_at REAL NOT NULL,expires_at REAL NOT NULL,revoked_at REAL);
+CREATE TABLE IF NOT EXISTS ai_sales_orders(
+  order_ref TEXT PRIMARY KEY,order_date TEXT NOT NULL,status TEXT NOT NULL,
+  source_classification TEXT NOT NULL,source_document_ref TEXT NOT NULL,
+  created_by INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ai_sales_lines(
+  order_ref TEXT NOT NULL,sku TEXT NOT NULL,qty REAL NOT NULL,unit TEXT NOT NULL,
+  PRIMARY KEY(order_ref,sku),FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref));
 
 """
 TABLES_WITH_IDS = {"users","products","inquiries","runs","candidates","reviews","audits"}
