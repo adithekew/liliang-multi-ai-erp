@@ -4,7 +4,7 @@ Train a small regularized linear autoregressive model; compare it against
 4-week mean on a chronologically locked final four weeks. No scikit-learn
 requirement on Render; no automatic production deployment.
 """
-import argparse,csv,hashlib,json,math
+import argparse,csv,hashlib,json,math,re
 from collections import defaultdict
 from datetime import date,timedelta,datetime,timezone
 from pathlib import Path
@@ -60,7 +60,7 @@ def read_weekly(path):
             if len(sha)!=64 or any(c not in "0123456789abcdef" for c in sha):
                 raise ValueError("Invalid Finance source document SHA-256")
             sku=row["sku"].strip().upper()
-            if not sku or any(c in sku for c in "@ \\n\\r"):
+            if not re.fullmatch(r"[A-Z0-9][A-Z0-9._/-]{2,79}",sku):
                 raise ValueError("Invalid SKU; use anonymous catalogue identifier")
             groups[sku].append((d,qty,sha))
     if not groups:raise ValueError("No weekly records")
