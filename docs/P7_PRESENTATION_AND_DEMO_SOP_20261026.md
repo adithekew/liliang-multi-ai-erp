@@ -2,9 +2,9 @@
 
 ## Before screen sharing
 - Use approved UAT accounts and sanitized/synthetic queries only. Never present passwords, customer references, confidential data or exportable Finance files.
-- Pilot web `/learning/center` only appears **after** this feature branch is merged and deployed; show deck wireframe if deployment has not been independently verified.
+- `/learning/center` became reachable on the Render pilot after PR #26 merged. It still requires a valid ERP login; show the deck wireframe if authenticated interactive five-role UAT is not available.
 - Five canonical roles: Admin, Sales, Technical, Manager Operasional and Gudang.
-- Confirm any Render deployment by live HTTP and an authenticated five-role test; a passing GitHub workflow alone is not a live UAT.
+- Render live HTTP route is verified; full authenticated five-role test and formal user sign-off remain pending. Green GitHub CI alone is not user acceptance.
 
 ## Main narrative (4 min 30 sec)
 1. **00:00–00:40** — Show P7 learning journey and why ERP skills are included; research core remains AI-02 semantic product matching.
@@ -23,6 +23,7 @@
 
 ## Traceability
 [Presentation deck](https://docs.google.com/presentation/d/1dDFkZJ1zdFq8EDzgLDFdnCMrW3d5ughA/edit) ·
+[Presenter notes PDF](https://drive.google.com/file/d/1Zo-BYij0B0_xzbmYt91ME5vzQww6CWsW/view) ·
 [Milestone report](https://drive.google.com/file/d/1Xkk8Tz_aTR4NZMDPPMhR2ixaKcagYNOr/view) ·
 [Assessment instrument](https://drive.google.com/file/d/1dke5B0SHJ-K-ito3Gz0_PFDd4eq-sxPv/view) ·
 [AI02 label/freeze/evaluation SOP](AI02_LABEL_FREEZE_EVALUATION_SOP_20261026.md).
