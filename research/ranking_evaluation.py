@@ -49,7 +49,7 @@ def evaluate(qrels,predictions,k=5):
         dcg=sum((2**grades[sku]-1)/math.log2(i+2) for i,sku in enumerate(top))
         ideal=sorted(grades.values(),reverse=True)[:k]
         idcg=sum((2**g-1)/math.log2(i+2) for i,g in enumerate(ideal))
-        ndcg=dcg/idcg if idcg else 1.0
+        ndcg=dcg/idcg if idcg else None  # no gain possible: metric undefined
         positives={sku for sku,g in grades.items() if g>=2}
         # Exclude no-positive cases from success rate or report explicitly.
         rank=next((i+1 for i,sku in enumerate(top) if sku in positives),None)
@@ -59,15 +59,17 @@ def evaluate(qrels,predictions,k=5):
             if not isinstance(latency,(int,float)) or not math.isfinite(latency) or latency<0:
                 raise ValueError("Invalid latency")
         per_query.append({"query_id":qid,"judged_skus":len(grades),
-            "ndcg_at_5":round(ndcg,6),"mrr_at_5":round(mrr,6),
+            "ndcg_at_5":round(ndcg,6) if ndcg is not None else None,"mrr_at_5":round(mrr,6),
             "recall_at_5":round(recall,6) if recall is not None else None,
             "has_relevant_gold":bool(positives),"retrieval_latency_ms":latency})
     latencies=sorted(r["retrieval_latency_ms"] for r in per_query if r["retrieval_latency_ms"] is not None)
     p95=latencies[math.ceil(.95*len(latencies))-1] if latencies else None
     relevant=[r for r in per_query if r["has_relevant_gold"]]
+    ndcg_defined=[r["ndcg_at_5"] for r in per_query if r["ndcg_at_5"] is not None]
     return {"status":"JUDGED_POOL_HELDOUT_EVALUATION",
        "query_count":len(per_query),"with_positive_gold":len(relevant),
-       "ndcg_at_5":round(statistics.mean(r["ndcg_at_5"] for r in per_query),4),
+       "ndcg_at_5":round(statistics.mean(ndcg_defined),4) if ndcg_defined else None,
+       "ndcg_eligible_queries":len(ndcg_defined),
        "mrr_at_5_relevant_queries":round(statistics.mean(r["mrr_at_5"] for r in relevant),4) if relevant else None,
        "recall_at_5_relevant_queries":round(statistics.mean(r["recall_at_5"] for r in relevant),4) if relevant else None,
        "p95_retrieval_latency_ms":p95,
@@ -78,7 +80,7 @@ def evaluate(qrels,predictions,k=5):
        "cautions":["Prediction ranking must be generated without seeing test labels.",
                    "Every returned SKU must be judged or evaluation stops.",
                    "P95 retrieval-only latency is not end-to-end page/login time.",
-                   "All-zero relevance inquiries have nDCG=1 but are excluded from MRR/Recall averages.",
+                   "All-zero relevance inquiries have undefined nDCG, and are excluded from nDCG/MRR/Recall aggregates.",
                    "Confidence intervals, baseline comparison and data quality sign-off are separate tasks."]}
 
 def main():
