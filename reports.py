@@ -48,7 +48,7 @@ HEADERS={
  "ai_bundling":["SKU A","SKU B","Basket Count","Support","Confidence","Lift"],
  "ai_forecast":["Week","Historical","Forecast","SKU"],
  "ai_research":["Metric","Value"],
- "ai_sales_facts":["Order Reference","Order Date","Status","SKU","Qty","Document Reference"],
+ "ai_sales_facts":["Order Reference","Order Date","Status","SKU","Qty (kg)","Document Reference"],
  "ai_bundling_company":["SKU A","SKU B","Order Count","Support","Confidence","Lift"],
  "ai_forecast_company":["SKU","Observed Weeks","Readiness Status","MAE","WMAPE %","Evidence Class"]
 }
