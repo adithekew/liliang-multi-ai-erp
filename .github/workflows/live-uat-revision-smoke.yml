@@ -34,7 +34,10 @@ jobs:
             "Gudang Inquiry RBAC": 'if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role)',
             "legacy UAT conflict flag": "HISTORICAL UAT CONFLICT",
             "candidate physical form": "Bentuk Katalog",
-            "stock count evidence": "physical_count_date"
+            "stock count evidence": "physical_count_date",
+            "AI Data Readiness navigation": 'datareadiness:"/ai/data-readiness"',
+            "AI Demo Preflight UI": "async function aiDataReadiness()",
+            "Protected order import": "/v1/admin/ai-sales-facts/import"
           }
           def fetch(path):
               req=Request(base+path,headers={"User-Agent":"Liliang-UAT-Revision-Smoke/1.0",
@@ -50,10 +53,10 @@ jobs:
                   html=fetch("/").decode("utf-8")
                   missing=[label for label,marker in required.items() if marker not in html]
                   if missing:raise AssertionError("Old Render revision, missing: "+", ".join(missing))
-                  for path in ("/inquiries","/dashboard","/reports"):
+                  for path in ("/inquiries","/dashboard","/reports","/ai/data-readiness"):
                       page=fetch(path).decode("utf-8")
                       assert 'function actionForm(title,fields)' in page,path
-                  print("PASS: Render serves third-UAT corrective UI revision with warehouse isolation and review warnings")
+                  print("PASS: Render serves AI01–AI04 demo readiness UI and third-UAT privacy fixes")
                   print("Health/readiness and new UI revision markers are present across routed pages")
                   print("NOTE: browser interaction, authenticated workflows and model precision still require UAT")
                   break
