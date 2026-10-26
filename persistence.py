@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS ai_sales_orders(
   source_classification TEXT NOT NULL,source_document_ref TEXT NOT NULL,
   created_by INTEGER NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_sales_lines(
-  order_ref TEXT NOT NULL,sku TEXT NOT NULL,qty REAL NOT NULL,
+  order_ref TEXT NOT NULL,sku TEXT NOT NULL,qty REAL NOT NULL,unit TEXT NOT NULL,
   PRIMARY KEY(order_ref,sku),FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref));
 
 """
