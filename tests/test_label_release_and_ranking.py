@@ -83,7 +83,7 @@ class ResearchGateTest(unittest.TestCase):
               {"query_id":"I1","sku":"SKU-B","relevance_label":0,"label_source":"TWO_INDEPENDENT_TECHNICAL_REVIEWERS"}]
         with self.assertRaisesRegex(ValueError,"UNJUDGED"):
             evaluate(gold,[{"query_id":"I1","ranked_skus":["SKU-X","SKU-A"]}])
-        with self.assertRaisesRegex(ValueError,"duplicate"):
+        with self.assertRaisesRegex(ValueError,"[Dd]uplicate"):
             evaluate(gold,[{"query_id":"I1","ranked_skus":["SKU-A","SKU-A"]}])
 
 if __name__=="__main__":unittest.main()
