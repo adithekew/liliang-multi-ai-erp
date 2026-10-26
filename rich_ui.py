@@ -68,7 +68,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // Only the short-lived JWT is in tab-scoped sessionStorage. No SKU, inquiry,
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
- hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",
+ hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
  overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
@@ -182,6 +182,7 @@ const menu=[
  ["research","▤","AI Research Evidence","AI MODULES"],
  ["systems","◉","AI System Status","AI MODULES"],
  ["datareadiness","☑","AI Demo & Data Readiness","AI MODULES"],
+ ["learning","▣","Learning & Adoption Center","USER ENABLEMENT"],
  ["overview","▦","Dashboard ERP","ERP OPERATIONS"],
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
@@ -221,7 +222,7 @@ async function enter(){
 }
 function navigate(p){if(!allowed(p)||!PAGE_URLS[p])return;window.location.assign(PAGE_URLS[p])}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="datareadiness")await aiDataReadiness();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="datareadiness")await aiDataReadiness();else if(page==="learning")await trainingCenter();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -708,6 +709,37 @@ async function auditTrail(){
  x.events.map(y=>'<tr><td>'+escapeHtml(y.at)+'</td><td>#'+escapeHtml(y.actor_id)+' / '+escapeHtml(y.actor_role)+'</td><td><b>'+escapeHtml(y.action)+'</b></td><td>'+escapeHtml(y.entity)+' #'+escapeHtml(y.entity_id)+'</td><td><code>'+escapeHtml(y.id.slice(0,13))+'...</code></td></tr>').join("")+'</table></div>'+
  '<p class="note">Password, inquiry free-text dan isi katalog sengaja tidak disalin ke audit event. Sebagian transaksi lama masih tersimpan dalam tabel audit legacy.</p></div>';
 }
+
+/* P7 user enablement is a nonpersistent, role-guided pilot wireframe. */
+function trainingCenter(){
+ const roleContent={
+  admin:["Admin","Kelola users/RBAC, provenance katalog, audit dan laporan.","Cek status data katalog|Kelola user sesuai role|Ekspor laporan dengan akses sesuai wewenang"],
+  sales:["Sales","Buat inquiry anonim, cocokkan kebutuhan bilingual, baca insight Top-5.","Konfirmasi flavor dan form|Buat inquiry dan jalankan BM25 satu kali|Teruskan hasil untuk review Technical"],
+  technical:["Technical","Validasi kecocokan kandidat memakai sumber bukti dan label relevansi 0–3.","Periksa TDS/CoA dan atribut UNKNOWN|Nilai kandidat 0–3 dengan alasan|Pisahkan review UAT dari gold label penelitian"],
+  manager:["Manager Operasional","Setujui rekomendasi hanya setelah validasi Technical grade-3 ACCEPT.","Periksa review Technical terbaru|Putuskan APPROVE/RETURN|Periksa audit dan keterbatasan AI"],
+  gudang:["Gudang","Kelola informasi katalog/stok tanpa mengakses inquiry pelanggan.","Periksa status UNKNOWN stock|Siapkan bukti stock opname sebelum ubah stok|Hindari akses inquiry sesuai RBAC"]
+ };
+ const here=roleContent[me.role]||roleContent.sales;
+ const learning=["Orientasi & pre-test","Microlearning per role","Praktik workflow end-to-end","Post-test & SUS","Evaluasi adopsi & backlog"];
+ const flow=learning.map((s,i)=>'<div class="card" style="border-top:3px solid #2764bf"><div class="eyebrow">TAHAP '+(i+1)+'</div><h3 style="margin-top:10px">'+escapeHtml(s)+'</h3><p class="note">Instrumen dan bukti hasil perlu dikumpulkan; belum terukur.</p></div>').join("");
+ const roleRows=Object.values(roleContent).map((r,i)=>'<tr><td>'+String(i+1)+'</td><td>'+escapeHtml(r[0])+'</td><td>'+escapeHtml(r[1])+'</td></tr>').join("");
+ const roleSteps=here[2].split("|").map(x=>'<li>'+escapeHtml(x)+'</li>').join("");
+ $("view").innerHTML=headline("P7 / USER ENABLEMENT","Learning & Adoption Center","Prototipe learning journey lima role untuk Capstone. Assessment dan analytics di halaman ini belum merekam peserta.")+
+ '<div class="warning"><b>SCIENTIFIC GATE:</b> AI-01 online rule-based, AI-02 online BM25; neural MiniLM+RRF offline synthetic lab. AI-03 bundling dan AI-04 forecast belum terverifikasi dari invoice; belum ada akurasi independent Technical.</div>'+
+ '<div class="grid two"><div class="card"><div class="eyebrow">ROLE-ADAPTIVE LEARNING</div><h2>'+escapeHtml(here[0])+'</h2><p class="sub">'+escapeHtml(here[1])+'</p><ol>'+roleSteps+'</ol><span class="tag unknown">Panduan role · Bukan bukti kompetensi</span></div>'+
+ '<div class="card"><h2>Learning Analytics — KPI Rancangan</h2><div class="tablewrap"><table><tr><th>KPI</th><th>Sumber</th><th>Status</th></tr>'+
+ '<tr><td>Knowledge gain</td><td>Post minus pre-test</td><td>Belum ada</td></tr><tr><td>Task success</td><td>UAT tugas per role</td><td>Rancangan P7</td></tr><tr><td>Time-to-shortlist</td><td>Pengukuran manual vs AI</td><td>Belum diukur</td></tr><tr><td>SUS</td><td>Kuesioner usability</td><td>Belum ada</td></tr><tr><td>Adoption</td><td>Pengguna aktif/peserta pilot</td><td>Belum ada</td></tr></table></div></div></div>'+
+ '<div class="toolbar"><h2>Learning Journey · Lima Tahap</h2><span class="tag">WIREFRAME, BUKAN LMS PRODUKSI</span></div><div class="grid">'+flow+'</div>'+
+ '<div class="grid two"><div class="card"><h2>Formative Quiz (lokal saja)</h2><p class="note">Jawaban tidak dikirim atau disimpan ke server.</p><form id="p7quiz">'+
+ '<label>Skor BM25 berarti probabilitas kecocokan produk?</label><select name="q1" required><option value="">Pilih</option><option value="a">Ya</option><option value="b">Tidak</option></select>'+
+ '<label>Stock UNKNOWN boleh diubah menjadi 0 tanpa stock opname?</label><select name="q2" required><option value="">Pilih</option><option value="a">Ya</option><option value="b">Tidak</option></select>'+
+ '<label>Hasil UAT otomatis menjadi gold label penelitian?</label><select name="q3" required><option value="">Pilih</option><option value="a">Ya</option><option value="b">Tidak</option></select>'+
+ '<button class="btn" type="submit">Periksa jawaban</button></form><p class="note" id="p7score" aria-live="polite"></p></div>'+
+ '<div class="card"><h2>Role Journey & Research Boundary</h2><p class="sub">Customer (eksternal) → Sales → AI-01/AI-02 BM25 → Technical review 0–3 → Manager approval → pelaporan dan dukungan Gudang.</p><div class="tablewrap"><table><tr><th>#</th><th>Role</th><th>Hasil belajar</th></tr>'+roleRows+'</table></div><p class="note">Data latihan harus sintetis atau anonim dengan izin. Jangan gunakan hasil kuis sebagai gold label AI-02.</p></div></div>';
+ const form=$("p7quiz");
+ form.onsubmit=e=>{e.preventDefault();const f=new FormData(form);const score=Number(f.get("q1")==="b")+Number(f.get("q2")==="b")+Number(f.get("q3")==="b");$("p7score").textContent="Skor latihan di browser: "+score+"/3 — bukan hasil pre/post-test resmi.";};
+}
+
 async function users(){
  let users=await api("/v1/users");
  $("view").innerHTML=headline("ADMIN / ACCESS CONTROL","User Management","Kelola akun internal lima role. Data bisa persisten setelah Neon dihubungkan dan diverifikasi.")+
