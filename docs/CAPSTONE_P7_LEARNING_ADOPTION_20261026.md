@@ -1,6 +1,6 @@
 # Capstone P7 — Learning Journey, User Enablement, Analytics & UX
 
-**Snapshot:** 26 October 2026 | **Status:** design and research-pilot UI feature branch; learning outcome not yet measured.
+**Snapshot:** 26 October 2026 | **Status:** learning UI merged via PR #26 and live route reachable; learning outcomes and five-role acceptance not yet measured.
 
 ## Research boundary
 Core study remains **AI-Assisted Semantic Product Matching for B2B Flavor Inquiry Management Using Hybrid Retrieval and Expert-in-the-Loop Validation**. Learning journey concerns adoption of the five-role ERP, not a second learning-recommendation AI research problem.
@@ -11,7 +11,7 @@ Core study remains **AI-Assisted Semantic Product Matching for B2B Flavor Inquir
 
 | Rubric | P7 implementation | Evidence/status |
 | --- | --- | --- |
-| Learning / upskilling module & UX | Role-specific SOP cards on `/learning/center` | UI prototype in feature branch |
+| Learning / upskilling module & UX | Role-specific SOP cards on `/learning/center` | UI merged, live route reachable; UAT pending |
 | Learning journey | orientation → microlearning → end-to-end simulation → post-test/SUS → backlog | designed, no participants enrolled |
 | Skills framework / assessment | five-role competency matrix, pre/post draft, formative 3-item self-check | self-check browser-only and nonpersistent |
 | Learning analytics & user progress | KPI definitions: paired learning gain, task success, completion time, SUS, role adoption | wireframe only, not measured |
@@ -52,6 +52,7 @@ Every dashboard item starts `NOT_MEASURED` until participant data is legitimatel
 - [Milestone report PDF](https://drive.google.com/file/d/1Xkk8Tz_aTR4NZMDPPMhR2ixaKcagYNOr/view)
 - [Pre/Post/UAT instrument PDF](https://drive.google.com/file/d/1dke5B0SHJ-K-ito3Gz0_PFDd4eq-sxPv/view)
 - [Kelompok 3 P7 Drive folder](https://drive.google.com/drive/folders/1gbiNBG8ejF-LTObMGJg9-kmQ30GVWrRx)
+- [Presenter notes 21 slides PDF](https://drive.google.com/file/d/1Zo-BYij0B0_xzbmYt91ME5vzQww6CWsW/view)
 
 Only explicitly public/sanitized material is included. Real sales/inquiry/customer documents, credentials and unlabeled internal sources must stay in separately controlled private storage.
 
@@ -59,8 +60,9 @@ Only explicitly public/sanitized material is included. Real sales/inquiry/custom
 
 - [x] Learning journey, matrix, draft assessment, dashboard specification and UX wireframe documented.
 - [x] Pilot learning page staged in a feature branch with browser-only formative self-check.
-- [ ] CI run for branch and code review.
-- [ ] GitHub PR merged after CI, then independent Render deployment confirmation and live role-based UAT.
+- [x] CI successful on PR #26 and post-merge main (26 Oct 2026).
+- [x] PR #26 merged; Render `/learning/center` reachable.
+- [ ] Complete independent interactive five-role UAT and stakeholder sign-off.
 - [ ] Five-role usability walkthrough and stakeholder feedback with date/provenance.
 - [ ] Participant pre/post, SUS, task timing/adoption measurement using consent.
 - [ ] Independent signed Technical gold labels, adjudication, frozen judged holdout and comparative evaluation E1–E5.
@@ -68,4 +70,4 @@ Only explicitly public/sanitized material is included. Real sales/inquiry/custom
 
 ## Reproducibility and no-risk guarantee
 
-P7 UI is read-only and client-side: no Neon schema alteration, company sales import, Technical review modification, stock adjustment, authentication setting change or AI model deployment. The page only becomes live after a separately verified branch merge and Render rollout.
+P7 UI is read-only and client-side: no Neon schema alteration, company sales import, Technical review modification, stock adjustment, authentication setting change or AI model deployment. The page is live after PR #26 and Render rollout. It remains read-only and must not be classified as fully user-accepted before authenticated five-role interactive testing.
