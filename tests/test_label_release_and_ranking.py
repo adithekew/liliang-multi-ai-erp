@@ -71,9 +71,10 @@ class ResearchGateTest(unittest.TestCase):
         pool,a,b=fixtures()
         # Normalized query content in two projects and distinct splits is leakage.
         groups={p["project_group"]:p for p in pool}
-        from research.label_release import split_for_group
-        first=next(p for p in pool if split_for_group(p["project_group"],"liliang-ai02-research-v1")=="train")
-        other=next(p for p in pool if split_for_group(p["project_group"],"liliang-ai02-research-v1")=="test")
+        from research.label_release import assign_splits
+        group_splits=assign_splits((p["project_group"] for p in pool),"liliang-ai02-research-v1")
+        first=next(p for p in pool if group_splits[p["project_group"]]=="train")
+        other=next(p for p in pool if group_splits[p["project_group"]]=="test")
         for p in pool:
             if p["inquiry_id"]==other["inquiry_id"]:p["query"]=first["query"]
         manifest,_,_=build_release(pool,a,b,[],"a"*64)
