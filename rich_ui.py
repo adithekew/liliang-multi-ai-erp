@@ -502,7 +502,7 @@ async function aiDataReadiness(){
  '<button class="btn" onclick="runCompanyBundling()">Lihat Aturan dari Data Perusahaan</button></div><div id="companyRules"></div>'+
  '<div style="margin-top:15px"><label>Forecast dari data perusahaan (SKU)</label><div class="actions"><input id="companySku" placeholder="SKU asli dari katalog" maxlength="80" style="max-width:280px"><button class="btn" onclick="runCompanyForecast()">Periksa Prediksi Riil</button></div></div><div id="companyForecast"></div>')+'</div>'+
  (me.role==="admin"?'<div class="card"><h2>Admin: Impor Sales Facts dengan Dokumen Asli</h2>'+
- '<p class="note">PENTING: hanya gunakan dokumen perusahaan yang telah diberikan izin dan diperiksa Finance. Jangan unggah file Excel mentah, data customer, atau UAT sintetis. File JSON berisi orders:[{order_ref, order_date, status, lines:[{sku,qty}]}]. Semua jumlah harus pada satuan yang konsisten. Tidak ada reset/update: order_ref unik dan append-only.</p>'+
+ '<p class="note">PENTING: hanya gunakan dokumen perusahaan yang telah diberikan izin dan diperiksa Finance. Jangan unggah file Excel mentah, data customer, atau UAT sintetis. File JSON berisi orders:[{order_ref, order_date, status, lines:[{sku,qty}]}]. Semua qty wajib kilogram (unit: "KG"), konversi dari satuan sumber harus disimpan di register Finance. Tidak ada reset/update: order_ref unik dan append-only.</p>'+
  '<label>Nomor register dokumen sumber</label><input id="aiFactRef" placeholder="FIN-REGISTER-2026-001" maxlength="100">'+
  '<label>File JSON berisi hanya order teranonimkan</label><input type="file" id="aiFactFile" accept=".json,application/json">'+
  '<div class="actions"><button class="btn" onclick="submitAISalesFacts()">Impor hanya data yang sudah diaudit</button>'+
