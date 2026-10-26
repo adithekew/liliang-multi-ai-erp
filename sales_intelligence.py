@@ -22,6 +22,7 @@ MIN_CONTIGUOUS_WEEKS=8
 class Item(BaseModel):
     sku: str=Field(min_length=3,max_length=80)
     qty: float=Field(gt=0,le=10000000)
+    unit: Literal['KG']  # all historical quantities must use one unit
     @field_validator("sku")
     @classmethod
     def valid_sku(cls,v):
@@ -76,7 +77,7 @@ def install_sales_schema(db):
        created_by INTEGER NOT NULL, created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ai_sales_lines(
-       order_ref TEXT NOT NULL, sku TEXT NOT NULL, qty REAL NOT NULL,
+       order_ref TEXT NOT NULL, sku TEXT NOT NULL, qty REAL NOT NULL, unit TEXT NOT NULL,
        PRIMARY KEY(order_ref,sku),
        FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref)
     );
@@ -158,7 +159,7 @@ def forecasting_actual(db,sku:str,horizon:int):
        "history":[{"week":d.isoformat(),"units":round(v,2)} for d,v in zip(dates,values)],
        "forecast":forecast,
        "metrics":{"rolling_mae_units":round(mae,2),"rolling_wmape_pct":round(wmape,2)},
-       "units":"recorded quantity per calendar week (unit standardization required)",
+       "units":"kg / completed calendar week (source KG required)",
        "cautions":["Missing weeks are not assumed to mean zero sales.",
                    "Partial latest weeks, returns, stockouts, lead time and mix of units must be reconciled.",
                    "Model not independently validated for production purchasing."]}
@@ -176,7 +177,7 @@ def readiness(db):
             "source_status":SOURCE,"needs_finance_validation":True,
             "company_models_scientifically_validated":False,
             "missing_for_real_evaluation":["Finance reconciliation (June, cancellations and returns)",
-               "Consistent quantities and units","Temporal train/test backtest",
+               "Verified kilogram quantities and source unit conversion evidence","Temporal train/test backtest",
                "Stockout and receipt/lead-time data for replenishment decisions"]}
 
 def mount_sales_intelligence(app,current,get_db,audit):
@@ -214,8 +215,8 @@ def mount_sales_intelligence(app,current,get_db,audit):
                      (o.order_ref,o.order_date.isoformat(),o.status,SOURCE,
                       data.source_document_ref,u["id"],stamp))
                 for item in o.lines:
-                    db.execute("INSERT INTO ai_sales_lines(order_ref,sku,qty) VALUES(?,?,?)",
-                               (o.order_ref,item.sku,item.qty))
+                    db.execute("INSERT INTO ai_sales_lines(order_ref,sku,qty,unit) VALUES(?,?,?,?)",
+                               (o.order_ref,item.sku,item.qty,item.unit))
             audit(db,u,"IMPORT_AI_SALES_FACTS","ai_sales_batch",0,
                   after={"orders":len(data.orders),"lines":sum(len(o.lines) for o in data.orders),
                          "source_document_ref":data.source_document_ref,
