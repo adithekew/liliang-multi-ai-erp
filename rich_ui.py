@@ -479,9 +479,10 @@ async function aiSystemStatus(){
  '<div class="grid two"><div class="card"><h2>AI-02 Research Workflow</h2><p class="sub">Pretrained neural vectors: GitHub Actions offline → versioned synthetic fixtures → cosine dense ranking → RRF hybrid fusion. FastAPI receives new arbitrary inquiries but currently ranks them with BM25 only.</p><button class="btn" onclick="navigate(\'hybrid\')">Test Precomputed Neural Demo</button></div><div class="card"><h2>Still Pending Before Research/Production</h2>'+status.limitations.map(s=>'<p class="small">• '+escapeHtml(s)+'</p>').join("")+'<button class="btn secondary" onclick="navigate(\'research\')">Review Scientific Readiness</button></div></div>';
 }
 async function aiDataReadiness(){
- const d=await api("/v1/ai/demo-readiness");
+ const [d,quality]=await Promise.all([api("/v1/ai/demo-readiness"),api("/v1/research/company-data-gates")]);
  const status=(ok)=>'<span class="tag '+(ok?"":"unknown")+'">'+(ok?"DEMO PASS":"NEEDS CHECK")+'</span>';
  const rows=d.modules.map(x=>'<tr><td><b>'+escapeHtml(x.id)+'</b></td><td>'+escapeHtml(x.mode)+'</td><td>'+status(x.status!=="ATTENTION")+'</td><td>'+escapeHtml(x.note)+'</td></tr>').join("");
+ const gatesTable=quality.gates.map(g=>'<tr><td><b>'+escapeHtml(g.id)+'</b></td><td><span class="tag unknown">PENDING</span></td><td>'+escapeHtml(g.reason)+'</td></tr>').join("");
  const facts=d.company_fact_readiness;
  const factRows=[
   ["Orders saved",facts.stored_order_count],["Eligible orders",facts.eligible_order_count],
@@ -494,9 +495,13 @@ async function aiDataReadiness(){
  '</strong> · Company-trained and validated models: NO. AI-03/04 synthetic mode is separate from company-attested order data. Live visual UAT tetap diperlukan.</div>'+
  '<div class="card"><div class="toolbar"><h2>Status seluruh AI</h2><button class="btn secondary" onclick="aiDataReadiness()">Periksa ulang</button></div>'+
  '<div class="tablewrap"><table><tr><th>Modul</th><th>Mode Eksekusi</th><th>Smoke</th><th>Catatan</th></tr>'+rows+'</table></div></div>'+
+ '<div class="card"><h2>Validasi Dataset dan Training — Data Perusahaan</h2>'+
+ '<p class="note">Status secara langsung dari database, bukan asumsi: katalog belum diverifikasi '+escapeHtml(quality.supplier_catalog_unverified)+' SKU; stok UNKNOWN '+escapeHtml(quality.gates.find(g=>g.id==="WMS")?.sku_stock_unknown)+'; Sales Order '+escapeHtml(quality.company_order_records)+'; label non-UAT '+escapeHtml(quality.pilot_nonuat_relevance_labels)+'. Label non-UAT bukan otomatis label pakar independen.</p>'+
+ '<div class="tablewrap"><table><tr><th>Modul</th><th>Gate</th><th>Bukti yang Dibutuhkan</th></tr>'+gatesTable+'</table></div>'+
+ '<p class="small">Training AI-02: offline MiniLM, setelah consent, 0–3 expert gold labels dan split held-out. Training AI-04: >=24 minggu KG lengkap per SKU dengan dokumen verifikasi Finance; hasil model belum boleh langsung dipromosikan. Stock opname bukan syarat training lexical matching, tetapi wajib untuk availability/reorder.</p></div>'+
  '<div class="toolbar"><h2>AI-03 & AI-04 — Kesiapan Transaksi Riil</h2><span class="tag unknown">COMPANY ATTESTED ≠ VERIFIED BY FINANCE</span></div>'+
  '<div class="grid">'+factRows+'</div>'+
- '<div class="card"><h2>Aturan kualitas data</h2><p class="small">AI-03 membutuhkan ≥10 order selesai/terkonfirmasi yang berbeda, beserta pasangan SKU asli. AI-04 membutuhkan ≥8 minggu penjualan berurutan yang benar-benar tercatat untuk SKU yang diprediksi. Minggu yang hilang tidak dianggap nol. Tidak ada auto-selling, retraining, atau pemesanan otomatis.</p>'+
+ '<div class="card"><h2>Aturan kualitas data</h2><p class="small">AI-03 membutuhkan ≥10 order selesai/terkonfirmasi yang berbeda, beserta pasangan SKU asli. AI-04 baseline membutuhkan ≥8 minggu penjualan berurutan; pelatihan ML khusus memerlukan minimal 24 minggu lengkap, validasi Finance, dan temporal holdout. Minggu yang hilang tidak dianggap nol. Tidak ada auto-selling, retraining, atau pemesanan otomatis.</p>'+
  (me.role==="technical"?'<p class="note">Technical: bagian operasional Sales/Forecast dibatasi berdasarkan role. Pantau readiness di atas atau buka AI-02 Research Evidence.</p>':
  '<div class="actions"><button class="btn secondary" onclick="navigate(\'bundling\')">AI-03 Synthetic Demo</button><button class="btn secondary" onclick="navigate(\'forecast\')">AI-04 Synthetic Demo</button>'+
  '<button class="btn" onclick="runCompanyBundling()">Lihat Aturan dari Data Perusahaan</button></div><div id="companyRules"></div>'+
