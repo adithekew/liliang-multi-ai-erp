@@ -21,7 +21,7 @@ class PilotFlow(unittest.TestCase):
             self.assertTrue(brand.content.startswith(bytes((0xFF,0xD8))))
             self.assertGreater(len(brand.content),2500)
             for route in ("/","/workspace","/dashboard","/catalog",
-                          "/inquiries","/ai/hybrid","/ai/evidence",
+                          "/inquiries","/ai/hybrid","/ai/evidence","/learning/center",
                           "/ai/status","/reports","/admin/users"):
                 page=client.get(route)
                 self.assertEqual(page.status_code,200,route)
@@ -141,7 +141,7 @@ class PilotFlow(unittest.TestCase):
             self.assertEqual(homepage.status_code,200)
             # All module pages are independent HTTP documents: deep links and refresh work.
             for uri,identity in [
-                ("/workspace","hub"),("/dashboard","overview"),
+                ("/workspace","hub"),("/dashboard","overview"),("/learning/center","learning"),
                 ("/catalog","catalog"),("/inquiries","inquiries"),
                 ("/ai/hybrid","hybrid"),("/ai/evidence","research"),
                 ("/ai/status","systems"),("/sales/bundling","bundling"),
@@ -157,6 +157,19 @@ class PilotFlow(unittest.TestCase):
                 self.assertIn("cache:\"no-store\"",response_page.text)
             self.assertIn("no-store",summary_response.headers.get("Cache-Control",""))
 
+            # P7 Demo: read-only Learning Center, five roles, client-side quiz.
+            p7=client.get("/learning/center")
+            self.assertEqual(p7.status_code,200)
+            self.assertEqual(p7.headers.get("X-ERP-Page"),"learning")
+            self.assertIn("function trainingCenter()",p7.text)
+            self.assertIn("admin:[",p7.text)
+            self.assertIn("sales:[",p7.text)
+            self.assertIn("technical:[",p7.text)
+            self.assertIn("manager:[",p7.text)
+            self.assertIn("gudang:[",p7.text)
+            self.assertIn("p7quiz",p7.text)
+            self.assertIn("Skor latihan di browser",p7.text)
+            self.assertIn("no-store",p7.headers.get("Cache-Control",""))
             self.assertIn("Multi-AI Workspace",homepage.text)
             caps=client.get("/v1/ai/capabilities",headers=admin)
             self.assertEqual(caps.status_code,200,caps.text)
