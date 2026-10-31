@@ -10,6 +10,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from fastapi.testclient import TestClient
+# Test discovery alphabetically imports this module before test_pilot.py.
+# Configure disposable CI-only credentials prior to importing app.
+os.environ.setdefault("APP_ENV","pilot")
+os.environ.setdefault("ADMIN_EMAIL","admin@test.local")
+os.environ.setdefault("ADMIN_PASSWORD","ci-unique-demo-12345")
+os.environ.setdefault("SECRET_KEY","CI-only-strong-nonproduction-signing-key-0123456789")
 from app import app,ADMIN_EMAIL,ADMIN_PASSWORD
 from persistence import connect
 
