@@ -30,8 +30,14 @@ CREATE TABLE IF NOT EXISTS ai_sales_lines(
   order_ref TEXT NOT NULL,sku TEXT NOT NULL,qty REAL NOT NULL,unit TEXT NOT NULL,
   PRIMARY KEY(order_ref,sku),FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref));
 
+CREATE TABLE IF NOT EXISTS wms_demo_movements(
+  id INTEGER PRIMARY KEY,reference TEXT UNIQUE NOT NULL,sku TEXT NOT NULL,
+  movement TEXT NOT NULL,qty_kg REAL NOT NULL,
+  actor_id INTEGER NOT NULL,at TEXT NOT NULL,note TEXT NOT NULL
+);
+
 """
-TABLES_WITH_IDS = {"users","products","inquiries","runs","candidates","reviews","audits"}
+TABLES_WITH_IDS = {"users","products","inquiries","runs","candidates","reviews","audits","wms_demo_movements"}
 def is_postgres():
     return bool(getenv("DATABASE_URL", "").strip())
 def engine_name():
