@@ -69,7 +69,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
  hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
- overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",
+ overview:"/dashboard",inquiries:"/inquiries",catalog:"/catalog",wms:"/wms/sandbox",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
  audit:"/admin/audit",reports:"/reports"
@@ -188,6 +188,7 @@ const menu=[
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
  ["bundling","♧","Sales Intelligence","APPLIED BI & INVENTORY"],
  ["forecast","▥","Forecast & Inventory","APPLIED BI & INVENTORY"],
+ ["wms","▣","WMS UAT Sandbox","APPLIED BI & INVENTORY"],
  ["users","⚙","User Management","ADMIN"],
  ["roles","♙","UAT Role Accounts","ADMIN"],
  ["migration","⇄","Catalog Migration","ADMIN"],
@@ -202,6 +203,7 @@ function allowed(key){
  if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
  if(key==="forecast")return ["admin","sales","manager","gudang"].includes(me.role);
+ if(key==="wms")return ["admin","manager","gudang"].includes(me.role);
  return true;
 }
 function frame(){
@@ -222,7 +224,7 @@ async function enter(){
 }
 function navigate(p){if(!allowed(p)||!PAGE_URLS[p])return;window.location.assign(PAGE_URLS[p])}
 async function show(){
- try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="datareadiness")await aiDataReadiness();else if(page==="learning")await trainingCenter();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
+ try{if(page==="hub")await hub();else if(page==="hybrid")await hybridLab();else if(page==="research")await researchEvidence();else if(page==="systems")await aiSystemStatus();else if(page==="datareadiness")await aiDataReadiness();else if(page==="learning")await trainingCenter();else if(page==="overview")await overview();else if(page==="catalog")await catalog();else if(page==="wms")await wmsSandbox();else if(page==="inquiries")await inquiries();else if(page==="bundling")await bundling();else if(page==="forecast")await forecast();else if(page==="users")await users();else if(page==="roles")await uatRoles();else if(page==="migration")await migration();else if(page==="audit")await auditTrail();else if(page==="reports")await reportCenter()}catch(e){fail(e);$("view").innerHTML='<div class="card error">'+escapeHtml(e.message)+'</div>'}
 }
 const headline=(eyebrow,title,sub)=>'<div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p class="sub">'+sub+'</p>';
 async function hub(){
@@ -298,6 +300,10 @@ async function inquiries(){
  const create=canNew?'<div class="card"><h2>New Customer Inquiry</h2><form id="newinq"><label>Customer Reference (Anonymous)</label><input name="customer_ref" value="UAT-ANON" maxlength="80"><label>Deskripsi Kebutuhan Flavor</label><textarea name="requirement" minlength="5" required placeholder="Contoh: Butuh mango flavor untuk minuman."></textarea><label>Bentuk produk yang diminta pelanggan</label><select name="requested_form"><option value="">Belum ditentukan — minta konfirmasi pelanggan</option><option value="powder">Powder / serbuk</option><option value="liquid">Liquid / cair</option><option value="paste">Paste / pasta</option><option value="oil">Oil / minyak</option><option value="emulsion">Emulsion / emulsi</option></select><p class="note">Aplikasi minuman TIDAK selalu berarti bentuk cair; serbuk juga bisa relevan. Pilih bentuk hanya jika sudah dikonfirmasi oleh pelanggan.</p><div class="form-actions"><button class="btn">Simpan Inquiry</button></div></form></div>':"";
  const tableRows=rows.map(x=>{
   const actions=[];
+  if(x.status==="RETURNED"&&["sales","admin"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="reviseInquiry('+x.id+')">Revisi & Ajukan Ulang</button>');
+  if(x.status==="RETURNED"&&["sales","admin","technical","manager"].includes(me.role))
+   actions.push('<button class="btn secondary" onclick="showManagerFeedback('+x.id+')">Lihat Alasan RETURN</button>');
   if(x.status==="NEW"&&["sales","admin"].includes(me.role))
    actions.push('<button class="btn secondary" onclick="matchInquiry('+x.id+')">Run BM25 Matching</button>');
   if(x.status!=="NEW"&&["sales","admin","technical","manager"].includes(me.role))
@@ -321,6 +327,36 @@ async function inquiries(){
   try{await api("/v1/inquiries","POST",z);toast("Inquiry disimpan");await inquiries()}
   finally{if(document.contains(button))button.disabled=false}
  }catch(err){fail(err)}};
+}
+async function showManagerFeedback(id){
+ try{
+  const x=await api("/v1/inquiries/"+id+"/manager-feedback");
+  const feedback=x.last_manager_decision;
+  const msg=feedback?(feedback.reason||"Alasan tidak tercatat pada riwayat lama."):"Belum ada keputusan Manager.";
+  const holder=$("workflowResult");
+  holder.innerHTML='<div class="card"><h2>Manager Feedback — Inquiry #'+id+'</h2>'+
+    '<p class="note">Keputusan terakhir: '+escapeHtml(feedback?.action||"NONE")+'</p>'+
+    '<p>'+escapeHtml(msg)+'</p></div>';
+ }catch(e){fail(e)}
+}
+async function reviseInquiry(id){
+ if(!["admin","sales"].includes(me.role))return;
+ try{
+  const x=await api("/v1/inquiries/"+id+"/manager-feedback");
+  const feedback=x.last_manager_decision;
+  const original=(await api("/v1/inquiries")).find(i=>i.id===id);
+  if(!original){toast("Inquiry tidak ditemukan pada daftar milik Anda",true);return}
+  const answer=await actionForm("Revisi Inquiry #"+id+" — "+(feedback?.reason||"Alasan RETURN lama tidak tercatat"),[
+   {name:"requirement",label:"Requirement hasil klarifikasi (ubah substansi, 5–500 karakter)",multiline:true,minlength:5}
+  ]);
+  if(!answer)return;
+  if(answer.requirement.trim()===(original.requirement||"").trim()){
+    toast("Requirement revisi harus berbeda dari sebelumnya",true);return
+  }
+  await api("/v1/inquiries/"+id+"/revise","POST",{requirement:answer.requirement});
+  toast("Revisi disimpan. Jalankan BM25 baru, lalu review ulang oleh Technical.");
+  await inquiries();
+ }catch(e){fail(e)}
 }
 function renderInquiryInsight(d){
  const i=d.insight;
@@ -408,6 +444,46 @@ async function managerApproval(id){
  ]);
  if(!d)return;
  try{let r=await api("/v1/inquiries/"+id+"/decision","POST",d);toast("Status: "+r.status);await inquiries()}catch(e){fail(e)}
+}
+async function wmsSandbox(){
+ const data=await api("/v1/wms/demo");
+ const editable=["admin","gudang"].includes(me.role);
+ const summary=data.skus.map(x=>'<div class="card"><div class="kpi-lbl">'+escapeHtml(x.sku)+'</div>'+
+  '<div class="kpi">'+escapeHtml(x.virtual_on_hand_kg)+' kg</div><p class="note">'+escapeHtml(x.name)+'</p></div>').join("");
+ const rows=data.movements.map(x=>'<tr><td>'+escapeHtml(x.id)+'</td><td>'+escapeHtml(x.reference)+'</td>'+
+ '<td>'+escapeHtml(x.sku)+'</td><td>'+escapeHtml(x.movement)+'</td>'+
+ '<td>'+escapeHtml(x.qty_kg)+'</td><td>'+escapeHtml(x.note)+'</td><td>'+escapeHtml(x.at)+'</td></tr>').join("");
+ const entry=editable?'<div class="card"><h2>Input Simulasi Gudang (bukan stok perusahaan)</h2><form id="wmsUatForm">'+
+ '<label>Nomor referensi unik UAT-*</label><input name="reference" required minlength="8" maxlength="70" placeholder="UAT-WMS-00001">'+
+ '<label>SKU virtual</label><select name="sku" required>'+
+ data.skus.map(x=>'<option value="'+escapeHtml(x.sku)+'">'+escapeHtml(x.sku)+'</option>').join("")+'</select>'+
+ '<label>Jenis transaksi</label><select name="movement" required><option value="IN">IN / Penerimaan</option><option value="OUT">OUT / Pengeluaran</option></select>'+
+ '<label>Kuantitas (KG)</label><input name="qty_kg" type="number" step="0.001" min="0.001" max="100000" required>'+
+ '<label>Catatan simulasi</label><textarea name="note" minlength="5" maxlength="180" required placeholder="Barang contoh UAT, bukan penerimaan sebenarnya"></textarea>'+
+ '<div class="actions"><button type="submit" class="btn">Catat UAT WMS</button></div></form></div>':"";
+ $("view").innerHTML=headline("WMS / DEMO ISOLATED","Gudang: Penerimaan, Pengeluaran & Ledger",
+   "Hanya transaksi simulasi UAT dengan tiga SKU fiktif. Tidak menggunakan atau mengubah stok 1.452 SKU perusahaan.")+
+ '<div class="warning"><b>UAT SANDBOX ONLY:</b> saldo pada halaman ini bukan stok fisik, bukan WMS produksi, dan tidak terhubung dengan Sales Order maupun invoice. Barang OUT harus memiliki saldo simulasi cukup. Semua referensi UAT harus unik.</div>'+
+ '<div class="grid">'+summary+'</div>'+entry+
+ '<div class="card"><div class="toolbar"><h2>Riwayat IN / OUT Virtual</h2>'+
+ '<button type="button" class="btn secondary" onclick="wmsSandbox()">Refresh</button>'+
+ '<button type="button" class="btn secondary" onclick="downloadReport(\'/v1/reports/wms_demo\',\'pdf\')">Laporan WMS UAT PDF</button></div>'+
+ '<div class="tablewrap"><table><tr><th>ID</th><th>Referensi</th><th>SKU UAT</th><th>IN/OUT</th><th>Qty KG</th><th>Catatan UAT</th><th>Waktu UTC</th></tr>'+rows+'</table></div>'+
+ (rows?"":'<p class="note">Belum ada transaksi sandbox. Sebagai Gudang, masukkan transaksi IN dahulu lalu OUT.</p>')+'</div>';
+ if(editable){
+  $("wmsUatForm").onsubmit=async e=>{
+   e.preventDefault();
+   const btn=e.target.querySelector('button[type="submit"]');if(btn.disabled)return;
+   btn.disabled=true;
+   try{
+    const data=Object.fromEntries(new FormData(e.target));
+    data.qty_kg=Number(data.qty_kg);
+    const saved=await api("/v1/wms/demo/movements","POST",data);
+    toast("Transaksi WMS UAT tersimpan; saldo virtual "+saved.balance_kg+" KG");
+    await wmsSandbox();
+   }catch(err){fail(err)}finally{if(document.contains(btn))btn.disabled=false}
+  };
+ }
 }
 async function bundling(){
  let d=await api("/v1/ai/bundling");

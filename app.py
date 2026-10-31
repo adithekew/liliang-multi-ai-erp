@@ -118,7 +118,9 @@ class ReviewIn(BaseModel):
     rationale:str=Field(min_length=5,max_length=500)
 class DecisionIn(BaseModel):
     decision:Literal["APPROVE","RETURN"]
-    note:str=Field(min_length=5)
+    note:str=Field(min_length=5,max_length=500)
+class RevisionIn(BaseModel):
+    requirement:str=Field(min_length=5,max_length=3000)
 class StockIn(BaseModel):
     stock_qty:float=Field(ge=0)
     # The pilot never assumes an unverified supplier catalog has on-hand stock.
@@ -220,6 +222,41 @@ def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get
                 (data.requirement,data.customer_ref,u["id"],now()))
         audit(db,u,"NEW_INQUIRY","inquiry",cur.lastrowid,after={"status":"NEW","requirement_recorded":True})
     return {"id":cur.lastrowid,"status":"NEW"}
+@app.get("/v1/inquiries/{iid}/manager-feedback")
+def manager_feedback(iid:int,u=Depends(permit("sales","admin","technical","manager")),db=Depends(get_db)):
+    import json
+    q=db.execute("SELECT id,created_by,status FROM inquiries WHERE id=?",(iid,)).fetchone()
+    if not q:raise HTTPException(404,"Inquiry not found")
+    if u["role"]=="sales" and q["created_by"]!=u["id"]:
+        raise HTTPException(403,"Not your inquiry")
+    ev=db.execute("""SELECT action,at,after_json FROM transaction_events
+        WHERE entity='inquiry' AND entity_id=? AND action IN ('MANAGER_APPROVE','MANAGER_RETURN')
+        ORDER BY at DESC LIMIT 1""",(str(iid),)).fetchone()
+    if not ev:return {"inquiry_id":iid,"status":q["status"],"last_manager_decision":None}
+    data=json.loads(ev["after_json"] or "{}")
+    return {"inquiry_id":iid,"status":q["status"],
+            "last_manager_decision":{"action":ev["action"],"at":ev["at"],"reason":data.get("reason"),
+                                    "historical_reason_missing":not bool(data.get("reason"))}}
+
+@app.post("/v1/inquiries/{iid}/revise")
+def revise_inquiry(iid:int,data:RevisionIn,u=Depends(permit("sales","admin")),db=Depends(get_db)):
+    inquiry=db.execute("SELECT id,created_by,status,requirement FROM inquiries WHERE id=?",(iid,)).fetchone()
+    if not inquiry:raise HTTPException(404,"Inquiry not found")
+    if u["role"]=="sales" and inquiry["created_by"]!=u["id"]:
+        raise HTTPException(403,"Not your inquiry")
+    if inquiry["status"]!="RETURNED":
+        raise HTTPException(409,"Only Manager-returned inquiries may be revised")
+    if data.requirement.strip()==(inquiry["requirement"] or "").strip():
+        raise HTTPException(422,"Explain the revision by updating the inquiry requirement")
+    with db:
+        revised=db.execute("UPDATE inquiries SET requirement=?,status='NEW' WHERE id=? AND status='RETURNED'",
+                           (data.requirement.strip(),iid))
+        if revised.rowcount!=1:raise HTTPException(409,"Inquiry state changed; reload before revising")
+        audit(db,u,"INQUIRY_REVISED","inquiry",iid,
+              before={"status":"RETURNED"},
+              after={"status":"NEW","revision_requires_new_match":True})
+    return {"id":iid,"status":"NEW","requires_new_matching":True,"previous_runs_preserved":True}
+
 @app.get("/v1/inquiries")
 def inquiries(u=Depends(permit("admin","sales","technical","manager")),db=Depends(get_db)):
     # Warehouse only has catalog/stock authority; inquiry metadata (IDs/status)
@@ -312,8 +349,9 @@ def review(rid:int,data:ReviewIn,u=Depends(permit("technical")),db=Depends(get_d
     if data.relevance_label==3 and data.decision=="REJECT":
         raise HTTPException(422,"Relevance label 3 cannot be REJECT")
     status=db.execute("SELECT status FROM inquiries WHERE id=?",(q["inquiry_id"],)).fetchone()
-    if not status or status["status"] in ("APPROVED","RETURNED"):
-        raise HTTPException(409,"Inquiry already decided; Technical review is closed")
+    latest_run=db.execute("SELECT id FROM runs WHERE inquiry_id=? ORDER BY id DESC LIMIT 1",(q["inquiry_id"],)).fetchone()
+    if not latest_run or latest_run["id"]!=rid or not status or status["status"] not in ("MATCHED","TECH_REVIEWED"):
+        raise HTTPException(409,"Only the latest active matching run can receive a Technical review")
     with db:
         cur=db.execute("INSERT INTO reviews(run_id,product_id,reviewer_id,decision,label,note) VALUES(?,?,?,?,?,?)",
                        (rid,data.product_id,u["id"],data.decision,data.relevance_label,data.rationale))
@@ -330,7 +368,8 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
         raise HTTPException(409,"Technical review required before Manager decision")
     if data.decision=="APPROVE":
         accepted=db.execute("""SELECT 1 FROM reviews v JOIN runs r ON r.id=v.run_id
-          WHERE r.inquiry_id=? AND v.decision='ACCEPT' AND v.label=3
+          WHERE r.id=(SELECT MAX(r2.id) FROM runs r2 WHERE r2.inquiry_id=?)
+          AND v.decision='ACCEPT' AND v.label=3
           AND v.id=(SELECT MAX(v2.id) FROM reviews v2
                     WHERE v2.run_id=v.run_id AND v2.product_id=v.product_id)
           LIMIT 1""",(iid,)).fetchone()
@@ -338,8 +377,10 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
             raise HTTPException(409,"Manager approval requires a latest Technical ACCEPT with relevance label 3")
     status="APPROVED" if data.decision=="APPROVE" else "RETURNED"
     with db:
-        db.execute("UPDATE inquiries SET status=? WHERE id=?",(status,iid))
-        audit(db,u,"MANAGER_"+data.decision,"inquiry",iid,before={"status":q["status"]},after={"status":status})
+        changed=db.execute("UPDATE inquiries SET status=? WHERE id=? AND status='TECH_REVIEWED'",(status,iid))
+        if changed.rowcount!=1:raise HTTPException(409,"Inquiry decision already processed")
+        audit(db,u,"MANAGER_"+data.decision,"inquiry",iid,before={"status":q["status"]},
+              after={"status":status,"reason":data.note.strip()})
     return {"status":status}
 @app.get("/v1/analytics/summary")
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
@@ -364,6 +405,8 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
+from wms_demo import mount_wms_demo
+mount_wms_demo(app,current,get_db,audit)
 from sales_intelligence import mount_sales_intelligence
 mount_sales_intelligence(app,current,get_db,audit)
 from demo_readiness import mount_demo_readiness
@@ -394,7 +437,7 @@ PAGE_ROUTES = {
     "/ai/data-readiness":"datareadiness",
     "/learning/center":"learning",
     "/dashboard":"overview", "/inquiries":"inquiries",
-    "/catalog":"catalog", "/sales/bundling":"bundling",
+    "/catalog":"catalog", "/wms/sandbox":"wms", "/sales/bundling":"bundling",
     "/inventory/forecast":"forecast", "/admin/users":"users",
     "/admin/roles":"roles", "/admin/catalog-migration":"migration",
     "/admin/audit":"audit", "/reports":"reports"
@@ -450,6 +493,7 @@ def index():
 @app.get("/learning/center",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/dashboard",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/inquiries",response_class=HTMLResponse,include_in_schema=False)
+@app.get("/wms/sandbox",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/catalog",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/sales/bundling",response_class=HTMLResponse,include_in_schema=False)
 @app.get("/inventory/forecast",response_class=HTMLResponse,include_in_schema=False)

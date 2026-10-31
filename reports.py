@@ -24,6 +24,7 @@ CATALOG={
  "technical_reviews":("Technical Review Decisions",("admin","technical","manager")),
  "manager_decisions":("Manager Approval and Return Log",("admin","manager")),
  "stock_movements":("Gudang Stock Movement Audit",("admin","gudang","manager")),
+ "wms_demo":("WMS UAT - Virtual Inbound/Outbound",("admin","gudang","manager")),
  "catalog":("Product Catalog Register",("admin","sales","technical","manager","gudang")),
  "audit":("Transaction Audit Trail",("admin",)),
  "ai_requirement":("AI-01 Requirement Interpreter Report",("admin","sales","technical","manager")),
@@ -39,8 +40,9 @@ HEADERS={
  "inquiries":["ID","Customer Reference","Requirement","Status","Created At","Created By"],
  "matching":["Run ID","Inquiry ID","Method","Latency (ms)","Candidate Count","Created At"],
  "technical_reviews":["Review ID","Run ID","Inquiry ID","SKU","Relevance (0-3)","Decision","Reviewer ID","Rationale"],
- "manager_decisions":["Time","Actor ID","Inquiry ID","Action","Previous Status","New Status"],
+ "manager_decisions":["Time","Actor ID","Inquiry ID","Action","Previous Status","New Status","Manager Reason"],
  "stock_movements":["Time","Actor ID","Product ID","SKU","Previous Qty","Updated Qty"],
+ "wms_demo":["ID","UTC Time","UAT Reference","UAT SKU","Direction","Qty (kg)","Note","Actor ID"],
  "catalog":["SKU","Product","Type","Applications","Stock","Source","PDF Page","PDF Row"],
  "audit":["UTC Timestamp","Actor ID","Actor Role","Action","Entity","Entity ID","Trace ID"],
  "ai_requirement":["Inquiry ID","Requirement","Extracted Flavor","Extracted Application","Evidence Status"],
@@ -100,7 +102,16 @@ def report_rows(kind,user,db,limit=500):
         rows=db.execute("""SELECT at,actor_id,entity_id,action,before_json,after_json
                            FROM transaction_events WHERE action IN ('MANAGER_APPROVE','MANAGER_RETURN')
                            ORDER BY at DESC LIMIT ?""",(limit,)).fetchall()
-        values=[[r["at"],r["actor_id"],r["entity_id"],r["action"],json_fields(r["before_json"]).get("status"),json_fields(r["after_json"]).get("status")] for r in rows]
+        values=[[r["at"],r["actor_id"],r["entity_id"],r["action"],
+                 json_fields(r["before_json"]).get("status"),
+                 json_fields(r["after_json"]).get("status"),
+                 json_fields(r["after_json"]).get("reason") or "NOT_RECORDED_HISTORICAL"] for r in rows]
+    elif kind=="wms_demo":
+        rows=db.execute("""SELECT id,at,reference,sku,movement,qty_kg,note,actor_id
+                   FROM wms_demo_movements ORDER BY id DESC LIMIT ?""",(limit,)).fetchall()
+        values=[[r["id"],r["at"],r["reference"],r["sku"],r["movement"],r["qty_kg"],
+                 r["note"],r["actor_id"]] for r in rows]
+        source="UAT_SANDBOX_VIRTUAL_SKUS_NOT_COMPANY_WMS"
     elif kind=="stock_movements":
         rows=db.execute("""SELECT e.at,e.actor_id,e.entity_id,p.sku,e.before_json,e.after_json
                            FROM transaction_events e LEFT JOIN products p ON CAST(e.entity_id AS TEXT)=CAST(p.id AS TEXT)
@@ -269,10 +280,14 @@ def inquiry_receipt(user,db,iid):
                               JOIN products p ON p.id=v.product_id WHERE v.run_id=? ORDER BY v.id""",(r["id"],)).fetchall()
         for v in reviews:
             rows.append(["Technical Review",str(v["sku"])+" | "+v["decision"]+" | label "+str(v["label"])+" | reviewer #"+str(v["reviewer_id"])+" | "+v["note"]])
-    for e in db.execute("""SELECT at,action,actor_id FROM transaction_events
-                           WHERE entity='inquiry' AND entity_id=? AND action IN ('MANAGER_APPROVE','MANAGER_RETURN')
+    for e in db.execute("""SELECT at,action,actor_id,after_json FROM transaction_events
+                           WHERE entity='inquiry' AND entity_id=?
+                           AND action IN ('MANAGER_APPROVE','MANAGER_RETURN','INQUIRY_REVISED')
                            ORDER BY at""",(str(iid),)).fetchall():
-        rows.append(["Manager Decision",str(e["action"])+" at "+str(e["at"])+" by user #"+str(e["actor_id"])])
+        reason=json_fields(e["after_json"]).get("reason")
+        rows.append(["Workflow History",str(e["action"])+" at "+str(e["at"])+" by user #"+str(e["actor_id"])])
+        if e["action"] in ("MANAGER_APPROVE","MANAGER_RETURN"):
+            rows.append(["Manager Reason",reason or "NOT_RECORDED_HISTORICAL"])
     return {"type":"inquiry_receipt","title":"Inquiry #"+str(iid)+" - Transaction Report",
             "source":"LIVE_ERP_TRANSACTION","generated_at":datetime.now(timezone.utc).isoformat(),
             "columns":["Field","Recorded Detail"],"rows":rows,"count":len(rows),

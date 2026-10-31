@@ -41,7 +41,11 @@ jobs:
             "independent company model gates": "async function aiDataReadiness()",
             "research guard reference": "/v1/research/company-data-gates",
             "exploratory proxy preview UI": "async function runProxyPreview()",
-            "proxy endpoint": "/v1/ai/bundling-proxy-preview"
+            "proxy endpoint": "/v1/ai/bundling-proxy-preview",
+            "Manager revision function": "async function reviseInquiry(id)",
+            "WMS UAT navigation": 'wms:"/wms/sandbox"',
+            "WMS UAT isolated API": "/v1/wms/demo/movements",
+            "UAT warehouse screen": "async function wmsSandbox()"
           }
           def fetch(path):
               req=Request(base+path,headers={"User-Agent":"Liliang-UAT-Revision-Smoke/1.0",
@@ -57,10 +61,10 @@ jobs:
                   html=fetch("/").decode("utf-8")
                   missing=[label for label,marker in required.items() if marker not in html]
                   if missing:raise AssertionError("Old Render revision, missing: "+", ".join(missing))
-                  for path in ("/inquiries","/dashboard","/reports","/ai/data-readiness"):
+                  for path in ("/inquiries","/dashboard","/reports","/wms/sandbox","/ai/data-readiness"):
                       page=fetch(path).decode("utf-8")
                       assert 'function actionForm(title,fields)' in page,path
-                  print("PASS: Render serves AI01–AI04 demo readiness UI and third-UAT privacy fixes")
+                  print("PASS: Render serves end-to-end Manager revision and isolated WMS UAT demo UI")
                   print("Health/readiness and new UI revision markers are present across routed pages")
                   print("NOTE: browser interaction, authenticated workflows and model precision still require UAT")
                   break

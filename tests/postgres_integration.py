@@ -77,6 +77,26 @@ class PostgresIntegrationTest(unittest.TestCase):
                     "email":row["email"],"password":row["password_once"]})
                 self.assertEqual(auth.status_code,200,auth.text)
                 role_headers[row["role"]]={"Authorization":"Bearer "+auth.json()["access_token"]}
+            # WMS sandbox uses its own PostgreSQL table; never mutates company/product stock.
+            sandbox=c.get("/v1/wms/demo",headers=role_headers["gudang"])
+            self.assertEqual(sandbox.status_code,200,sandbox.text)
+            self.assertTrue(sandbox.json()["not_company_stock"])
+            stock_before=c.get("/v1/products",headers=role_headers["gudang"]).json()
+            start_stock=next(x["stock"] for x in stock_before if x["sku"]=="FLV-MANG-03")
+            incoming=c.post("/v1/wms/demo/movements",headers=role_headers["gudang"],json={
+                "reference":"UAT-PG-WMS-IN-001","sku":"UAT-WMS-MANGO",
+                "movement":"IN","qty_kg":12,"note":"PostgreSQL isolated UAT inbound"})
+            self.assertEqual(incoming.status_code,201,incoming.text)
+            outgoing=c.post("/v1/wms/demo/movements",headers=role_headers["gudang"],json={
+                "reference":"UAT-PG-WMS-OUT-001","sku":"UAT-WMS-MANGO",
+                "movement":"OUT","qty_kg":5,"note":"PostgreSQL isolated UAT outbound"})
+            self.assertEqual(outgoing.status_code,201,outgoing.text)
+            self.assertEqual(outgoing.json()["balance_kg"],7)
+            stock_after=c.get("/v1/products",headers=role_headers["gudang"]).json()
+            self.assertEqual(next(x["stock"] for x in stock_after if x["sku"]=="FLV-MANG-03"),start_stock)
+            self.assertEqual(c.get("/v1/reports/wms_demo?format=pdf",
+                                   headers=role_headers["gudang"]).status_code,200)
+
             # Technical and Manager inspect the Sales ranking without rerunning AI.
             technical_view=c.get(f"/v1/inquiries/{iid}/latest-match",headers=role_headers["technical"])
             self.assertEqual(technical_view.status_code,200,technical_view.text)
@@ -127,7 +147,7 @@ class PostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(inventory.status_code,200,inventory.text)
             # Server creates downloadable PDF and CSV reports for real persisted PostgreSQL transactions.
             for k in ("inquiries","matching","technical_reviews","manager_decisions",
-                      "stock_movements","catalog","audit","ai_requirement","ai_hybrid","ai_bundling","ai_forecast","ai_research"):
+                      "stock_movements","wms_demo","catalog","audit","ai_requirement","ai_hybrid","ai_bundling","ai_forecast","ai_research"):
                 pdf=c.get("/v1/reports/"+k+"?format=pdf",headers=headers)
                 self.assertEqual(pdf.status_code,200,k+": "+str(pdf.status_code))
                 self.assertTrue(pdf.content.startswith(b"%PDF"),k)
