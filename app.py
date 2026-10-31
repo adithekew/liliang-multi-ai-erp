@@ -222,6 +222,22 @@ def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get
                 (data.requirement,data.customer_ref,u["id"],now()))
         audit(db,u,"NEW_INQUIRY","inquiry",cur.lastrowid,after={"status":"NEW","requirement_recorded":True})
     return {"id":cur.lastrowid,"status":"NEW"}
+@app.get("/v1/inquiries/{iid}/manager-feedback")
+def manager_feedback(iid:int,u=Depends(permit("sales","admin","technical","manager")),db=Depends(get_db)):
+    import json
+    q=db.execute("SELECT id,created_by,status FROM inquiries WHERE id=?",(iid,)).fetchone()
+    if not q:raise HTTPException(404,"Inquiry not found")
+    if u["role"]=="sales" and q["created_by"]!=u["id"]:
+        raise HTTPException(403,"Not your inquiry")
+    ev=db.execute("""SELECT action,at,after_json FROM transaction_events
+        WHERE entity='inquiry' AND entity_id=? AND action IN ('MANAGER_APPROVE','MANAGER_RETURN')
+        ORDER BY at DESC LIMIT 1""",(str(iid),)).fetchone()
+    if not ev:return {"inquiry_id":iid,"status":q["status"],"last_manager_decision":None}
+    data=json.loads(ev["after_json"] or "{}")
+    return {"inquiry_id":iid,"status":q["status"],
+            "last_manager_decision":{"action":ev["action"],"at":ev["at"],"reason":data.get("reason"),
+                                    "historical_reason_missing":not bool(data.get("reason"))}}
+
 @app.post("/v1/inquiries/{iid}/revise")
 def revise_inquiry(iid:int,data:RevisionIn,u=Depends(permit("sales","admin")),db=Depends(get_db)):
     inquiry=db.execute("SELECT id,created_by,status,requirement FROM inquiries WHERE id=?",(iid,)).fetchone()
