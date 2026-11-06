@@ -1,0 +1,4 @@
+# OPTIONAL only after Groq Free account/permission verified
+# Main Render build remains requirements.txt (no paid API or extra CPU)
+-r requirements.txt
+pydantic-ai-slim[groq]>=1,<2
