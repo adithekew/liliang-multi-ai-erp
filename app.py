@@ -43,6 +43,8 @@ def connect():
 def boot():
     with connect() as db:
         install_schema(db)
+        from sample_flow import install_sample_schema
+        install_sample_schema(db)
         if not db.execute("SELECT id FROM users WHERE email=?",(ADMIN_EMAIL,)).fetchone():
             db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(ADMIN_EMAIL,"ERP Administrator","admin",ph.hash(ADMIN_PASSWORD)))
         # An archived reset is a durable marker: do not re-seed demo products on restart.
@@ -375,12 +377,33 @@ def decide(iid:int,data:DecisionIn,u=Depends(permit("manager","admin")),db=Depen
           LIMIT 1""",(iid,)).fetchone()
         if not accepted:
             raise HTTPException(409,"Manager approval requires a latest Technical ACCEPT with relevance label 3")
+    # The new Sales-first sample flow must complete its Technical submit,
+    # with the exactly selected SKU validated on the latest matching run.
+    sample=db.execute("SELECT run_id,product_id,status FROM sample_requests WHERE inquiry_id=?",(iid,)).fetchone()
+    if sample:
+        if u["role"]!="manager":
+            raise HTTPException(403,"Sample approval belongs to Manager Operasional")
+        if sample["status"]!="WAITING_MANAGER":
+            raise HTTPException(409,"Technical must submit the selected SKU first")
+        latest=db.execute("SELECT id FROM runs WHERE inquiry_id=? ORDER BY id DESC LIMIT 1",(iid,)).fetchone()
+        from sample_flow import _check_accepted
+        if not latest or latest["id"]!=sample["run_id"] or not sample["product_id"] or not _check_accepted(db,latest["id"],sample["product_id"]):
+            raise HTTPException(409,"Selected sample SKU requires latest Technical ACCEPT label 3")
     status="APPROVED" if data.decision=="APPROVE" else "RETURNED"
     with db:
         changed=db.execute("UPDATE inquiries SET status=? WHERE id=? AND status='TECH_REVIEWED'",(status,iid))
         if changed.rowcount!=1:raise HTTPException(409,"Inquiry decision already processed")
         audit(db,u,"MANAGER_"+data.decision,"inquiry",iid,before={"status":q["status"]},
               after={"status":status,"reason":data.note.strip()})
+        if sample:
+            sample_status="WAITING_WAREHOUSE" if data.decision=="APPROVE" else "RETURNED"
+            changed_sample=db.execute("""UPDATE sample_requests SET status=?,updated_at=?
+                  WHERE inquiry_id=? AND status='WAITING_MANAGER'""",
+                  (sample_status,now(),iid))
+            if changed_sample.rowcount!=1:
+                raise HTTPException(409,"Sample approval stage changed")
+            audit(db,u,"SAMPLE_MANAGER_"+data.decision,"sample_request",iid,
+                  after={"next":sample_status,"selected_product_id":sample["product_id"]})
     return {"status":status}
 @app.get("/v1/analytics/summary")
 def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db=Depends(get_db)):
@@ -421,6 +444,8 @@ from enterprise_ops import mount_enterprise
 mount_enterprise(app,current,get_db,audit,ph)
 from reports import mount_reports
 mount_reports(app,current,get_db)
+from sample_flow import mount_sample_flow
+mount_sample_flow(app,current,get_db,audit)
 @app.get("/branding/logo",include_in_schema=False)
 def official_brand_logo():
     """Serve permanent corporate branding asset included in this deployment."""
