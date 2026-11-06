@@ -176,7 +176,9 @@ def mount_agent(app, current):
         data = snapshot(request.case_id)
         if request.provider == "groq":
             if not external_enabled():
-                raise HTTPException(409, "Groq disabled; local synthetic mode available")
+                raise HTTPException(409, "Groq not configured; set Free key and opt-in in Render")
+            if not _reserve_uat_attempt():
+                raise HTTPException(429, "Daily UAT request cap reached; use local mode")
             try:
                 explanation = await groq_explain(data)
             except Exception:
@@ -222,7 +224,10 @@ let data=await r.json();if(!r.ok)throw Error(data.detail||"Request failed");retu
 async function start(){if(!token){el("status").textContent="Login ERP terlebih dahulu.";el("run").disabled=true;return;}
 try{let s=await api("/v1/agent/status");for(const id of s.case_ids){let o=document.createElement("option");
 o.value=id;o.textContent=id;el("scenario").appendChild(o);}
-el("status").textContent="Local tersedia · Groq: "+s.groq;}
+el("status").textContent="Local tersedia · Groq: "+s.groq+
+" · SDK: "+(s.sdk_installed?"Siap":"Belum")+
+" · API key: "+(s.api_key_present?"Ada":"Belum")+
+" · Sisa sesi UAT: "+s.uat_request_budget.attempts_remaining;}
 catch(e){el("status").textContent=e.message;el("run").disabled=true;}}
 el("run").onclick=async()=>{el("run").disabled=true;
 try{let r=await api("/v1/agent/demo",{method:"POST",body:JSON.stringify({
