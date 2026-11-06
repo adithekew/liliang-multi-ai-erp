@@ -222,8 +222,11 @@ def mount_enterprise(app,current,get_db,audit,ph):
             args=(pat,pat,pat)
         count=db.execute("SELECT COUNT(*) AS total FROM products p"+where,args).fetchone()["total"]
         rows=db.execute("""SELECT p.id,p.sku,p.name,p.application,p.source_ref,p.stock,
-                                 d.product_type,d.composition_raw,d.source_page,d.source_number
-                          FROM products p LEFT JOIN catalog_product_details d ON d.sku=p.sku"""+where+
+                                 d.product_type,d.composition_raw,d.source_page,d.source_number,
+                                 v.package_uom,v.package_content,v.content_uom,
+                                 v.dispatch_uom_status,v.confirmation_status
+                          FROM products p LEFT JOIN catalog_product_details d ON d.sku=p.sku
+                          LEFT JOIN physical_inventory_stock v ON v.sku=p.sku"""+where+
                         " ORDER BY p.sku LIMIT ? OFFSET ?",args+(size,(page-1)*size)).fetchall()
         return {"total":count,"page":page,"size":size,"items":[dict(r) for r in rows]}
 
