@@ -1,11 +1,22 @@
 """Complete Sales->Technical->Manager->Gudang Sample UAT workflow acceptance."""
-import os, tempfile, unittest
+import os, tempfile, unittest, subprocess, shutil
 from pathlib import Path
 from fastapi.testclient import TestClient
 from app import app,ADMIN_EMAIL,ADMIN_PASSWORD
 from persistence import connect
 
 class SampleUATWorkflow(unittest.TestCase):
+    def test_approval_page_javascript_syntax(self):
+        """Check separate-page inline JavaScript, in addition to existing ERP UI syntax."""
+        if not shutil.which("node"):
+            self.skipTest("Node binary is unavailable")
+        from sample_flow import PAGE
+        js=PAGE.split("<script>",1)[1].split("</script>",1)[0]
+        with tempfile.TemporaryDirectory(prefix="sample_js_") as tmp:
+            file=Path(tmp)/"sample_detail.js"
+            file.write_text(js,encoding="utf-8")
+            done=subprocess.run(["node","--check",str(file)],capture_output=True,text=True)
+            self.assertEqual(done.returncode,0,done.stderr)
     def test_role_gates_stock_and_pdf_end_to_end(self):
         previous=os.environ.get("DATABASE_PATH")
         with tempfile.TemporaryDirectory(prefix="liliang_sample_flow_ci_") as tmp:
