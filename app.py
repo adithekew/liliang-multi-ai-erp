@@ -208,16 +208,28 @@ def stock(pid:int,data:StockIn,u=Depends(permit("admin","gudang")),db=Depends(ge
             raise HTTPException(422,"Physical count date must be YYYY-MM-DD")
         if verified_on>datetime.now(timezone.utc).date():
             raise HTTPException(422,"Physical count date cannot be in the future")
+    physical=db.execute("""SELECT sku,qty_packages,package_uom FROM physical_inventory_stock
+                             WHERE sku=(SELECT sku FROM products WHERE id=?)""",(pid,)).fetchone()
+    if physical and not float(data.stock_qty).is_integer():
+        raise HTTPException(422,"Stok fisik wajib berupa jumlah kemasan bulat, bukan pecahan KG/ml")
     with db:
         c=db.execute("UPDATE products SET stock=? WHERE id=?",(data.stock_qty,pid))
         if not c.rowcount:raise HTTPException(404,"SKU not found")
+        if physical:
+            updated=db.execute("""UPDATE physical_inventory_stock SET qty_packages=?,
+                   confirmation_status='PHYSICAL_COUNT_UPDATED',confirmed_at=?
+                   WHERE sku=?""",(data.stock_qty,now(),physical["sku"]))
+            if updated.rowcount!=1:
+                raise HTTPException(409,"Failed to synchronize stock and package units")
         audit(db,u,"STOCK_UPDATE","product",pid,
               before={"stock":previous["stock"]},
               after={"stock":data.stock_qty,
+                     "package_uom":physical["package_uom"] if physical else None,
                      "physical_count_reference":data.verification_ref.strip() if imported else None,
                      "physical_count_date":data.physical_count_date if imported else None,
                      "source":"PHYSICAL_COUNT_DECLARED" if imported else "DEMO_PRODUCT"})
     return {"product_id":pid,"stock_qty":data.stock_qty,
+            "package_uom":physical["package_uom"] if physical else "UNSPECIFIED",
             "verification_recorded":imported}
 @app.post("/v1/inquiries",status_code=201)
 def new_inquiry(data:InquiryIn,u=Depends(permit("sales","admin")),db=Depends(get_db)):
