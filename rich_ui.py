@@ -69,7 +69,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
  hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
- overview:"/dashboard",inquiries:"/inquiries",transactions:"/transactions",catalog:"/catalog",wms:"/wms/sandbox",
+ overview:"/dashboard",inquiries:"/inquiries",transactions:"/transactions",catalog:"/catalog",stockreference:"/stock/reference",wms:"/wms/sandbox",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
  audit:"/admin/audit",reports:"/reports"
@@ -187,6 +187,7 @@ const menu=[
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["transactions","▤","Transaksi & Approval","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
+ ["stockreference","▦","Stok Referensi CSV","ERP OPERATIONS"],
  ["bundling","♧","Sales Intelligence","APPLIED BI & INVENTORY"],
  ["forecast","▥","Forecast & Inventory","APPLIED BI & INVENTORY"],
  ["wms","▣","WMS UAT Sandbox","APPLIED BI & INVENTORY"],
