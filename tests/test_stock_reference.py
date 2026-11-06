@@ -49,7 +49,7 @@ class CatalogStockReferenceTests(unittest.TestCase):
                     self.assertEqual(no_match.json()["total_matching"],0)
                     html=client.get("/stock/reference")
                     self.assertEqual(html.status_code,200)
-                    self.assertIn("Belum diverifikasi",html.text)
+                    self.assertIn("Stok fisik dikonfirmasi pengguna",html.text)
                     with connect() as db:
                         self.assertEqual(db.execute("SELECT stock FROM products WHERE sku=?",(sku,)).fetchone()["stock"],real_stock)
                         self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM sample_uat_balances").fetchone()["n"],0)
