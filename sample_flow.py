@@ -122,6 +122,12 @@ def _as_transaction(db,inquiry,sample,user):
         reported=db.execute("""SELECT reported_stock,unit,verification_status,source_ref
           FROM catalog_stock_reference WHERE sku=?""",(selected["sku"],)).fetchone()
         if reported:stock_reference=dict(reported)
+    physical_stock=None
+    if selected:
+        package=db.execute("""SELECT qty_packages,product_type,package_uom,
+             package_content,content_uom,dispatch_uom_status,confirmation_status
+             FROM physical_inventory_stock WHERE sku=?""",(selected["sku"],)).fetchone()
+        if package:physical_stock=dict(package)
     events=[dict(x) for x in db.execute("""SELECT action,actor_role,at FROM transaction_events
         WHERE (entity='inquiry' AND entity_id=?) OR (entity='sample_request' AND entity_id=?)
         ORDER BY at DESC LIMIT 30""",(str(inquiry["id"]),str(inquiry["id"]))).fetchall()]
@@ -134,9 +140,12 @@ def _as_transaction(db,inquiry,sample,user):
         "candidates":candidates,"selected_product":selected,
         "virtual_stock_kg":_balance(db,selected["sku"]) if selected else None,
         "csv_stock_reference":stock_reference,
+        "physical_inventory":physical_stock,
         "timeline": STEPS,"current_step":_status_index(inquiry,sample),
         "activity":events,"scope":"UAT_VIRTUAL_STOCK_NOT_REAL_COMPANY_WAREHOUSE",
-        "actual_stock_verified":False,"valid_for_physical_shipment":False,
+        "actual_stock_user_confirmed":bool(physical_stock),
+        "valid_for_physical_shipment":False,
+        "notice":"Physical stock per package is user-confirmed, but this transaction module only dispatches virtual UAT stock in KG; real shipping integration is not enabled.",
     }
 
 def _require_uat(value):
@@ -465,8 +474,10 @@ function renderDetail(){
  '</p><p><b>Qty:</b> '+esc(s?.qty_kg||"—")+' KG</p><p><b>Penerima:</b> '+esc(s?.recipient||"—")+
  '</p><p><b>Tujuan:</b> '+esc(s?.destination||"—")+'</p><p><b>Stok virtual:</b> '+
  esc(d.virtual_stock_kg??"Belum tersedia")+' KG (UAT)</p><p><b>Stok laporan CSV:</b> '+
- esc(d.csv_stock_reference?.reported_stock??"Tidak tercatat")+
- ' (satuan belum ditentukan; UNVERIFIED)</p><p class="muted"><a href="/stock/reference">Lihat semua stok referensi CSV →</a></p></section></div>';
+ esc(d.physical_inventory?.qty_packages??"Tidak tercatat")+' '+esc(d.physical_inventory?.package_uom||"UoM belum ditetapkan")+
+ ' (isi per kemasan: '+esc(d.physical_inventory?.package_content??"–")+' '+esc(d.physical_inventory?.content_uom||"")+
+ ', konfirmasi pengguna)</p><p class="muted">Simulasi pengiriman di halaman ini tetap memakai stok virtual KG; belum mengurangi stok fisik.</p>'+
+ '<p class="muted"><a href="/stock/reference">Lihat Stok Fisik & Kemasan →</a></p></section></div>';
  }else if(currentTab==="matching"){
  content='<section class="card"><h2>AI-02 Candidate Top-5 · BM25</h2><p class="muted">Nilai BM25 bukan probabilitas kelayakan. Technical ACCEPT wajib label 3.</p>'+
  '<table><tr><th>Rank</th><th>SKU</th><th>Produk</th><th>Score</th><th>Technical</th></tr>'+

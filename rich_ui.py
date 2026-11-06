@@ -187,7 +187,7 @@ const menu=[
  ["inquiries","☷","Inquiry & Matching","ERP OPERATIONS"],
  ["transactions","▤","Transaksi & Approval","ERP OPERATIONS"],
  ["catalog","◉","Product Catalog","ERP OPERATIONS"],
- ["stockreference","▦","Stok Referensi CSV","ERP OPERATIONS"],
+ ["stockreference","▦","Stok Fisik & Kemasan","ERP OPERATIONS"],
  ["bundling","♧","Sales Intelligence","APPLIED BI & INVENTORY"],
  ["forecast","▥","Forecast & Inventory","APPLIED BI & INVENTORY"],
  ["wms","▣","WMS UAT Sandbox","APPLIED BI & INVENTORY"],
@@ -264,11 +264,11 @@ async function catalog(){
  let data=await api("/v1/catalog/products?q="+encodeURIComponent(catalogQuery)+"&page="+catalogPage+"&size=50");
  const editable=["admin","gudang"].includes(me.role) && !String(me.email||"").toLowerCase().startsWith("uat-");
  $("view").innerHTML=headline("ERP / MASTER DATA","Product Flavor Catalog",
- "1.452 SKU dari PDF PT. Li Liang masih menunggu Technical validation. Stok yang belum dikonfirmasi Gudang ditampilkan UNKNOWN; jangan memasukkan stok simulasi pada katalog perusahaan.")+
+ "1.452 SKU dari katalog PDF; stok fisik telah dikonfirmasi oleh pengguna 6 Nov 2026, dengan Powder 300 g/unit, Paste 200 ml/botol, Liquid 500 ml/dirigen. Tipe lain menunggu aturan satuan. Technical validation produk tetap terpisah.")+
  '<div class="card"><div class="toolbar"><h2>Product Master · '+data.total+' SKU</h2><div class="actions"><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'pdf\')">PDF 1.452 SKU</button><button class="btn secondary" onclick="downloadReport(\'/v1/reports/catalog?limit=2000\',\'csv\')">CSV Semua SKU</button><span class="tag unknown">SUPPLIER CATALOG — UNVERIFIED</span></div></div>'+
  '<div class="actions"><input id="catalogsearch" style="max-width:320px" value="'+escapeHtml(catalogQuery)+'" placeholder="Cari SKU, nama, pemakaian"><button class="btn" id="catalogfind">Cari</button><button class="btn secondary" id="catalogclear">Reset Filter</button></div>'+
- '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stock</th><th>Source</th>'+(editable?'<th>Inventory Action</th>':'')+'</tr>'+
- data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td>'+(editable?'<td><button class="btn secondary" onclick="editStock('+x.id+')">Update Stock</button></td>':'')+'</tr>').join("")+
+ '<div class="tablewrap" style="margin-top:16px"><table><tr><th>SKU</th><th>Product Name</th><th>Type</th><th>Applications</th><th>Catalog % Text</th><th>Stok (Kemasan)</th><th>Satuan</th><th>Isi per Kemasan</th><th>Source</th>'+(editable?'<th>Inventory Action</th>':'')+'</tr>'+
+ data.items.map(x=>'<tr><td><b>'+escapeHtml(x.sku)+'</b></td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.product_type||"UNKNOWN")+'</td><td>'+escapeHtml(x.application||"UNKNOWN")+'</td><td>'+escapeHtml(x.composition_raw||"NOT PROVIDED")+'</td><td>'+escapeHtml(x.stock===null?"UNKNOWN":x.stock)+'</td><td>'+escapeHtml(x.package_uom||"UNSPECIFIED")+'</td><td>'+escapeHtml(x.package_content===null?"BELUM ADA":x.package_content+" "+x.content_uom)+'</td><td><span class="tag unknown">'+escapeHtml(x.source_ref||"UNKNOWN")+'</span></td>'+(editable?'<td><button class="btn secondary" onclick="editStock('+x.id+')">Update Stock</button></td>':'')+'</tr>').join("")+
  '</table></div><div class="actions" style="margin-top:18px"><button class="btn secondary" id="prevcatalog" '+(catalogPage===1?"disabled":"")+'>← Sebelumnya</button><span class="small">Halaman '+catalogPage+' dari '+Math.max(1,Math.ceil(data.total/50))+'</span><button class="btn secondary" id="nextcatalog" '+(catalogPage*50>=data.total?"disabled":"")+'>Selanjutnya →</button></div></div>';
  $("catalogfind").onclick=()=>{catalogQuery=$("catalogsearch").value;catalogPage=1;catalog()};
  $("catalogsearch").onkeydown=e=>{if(e.key==="Enter"){catalogQuery=e.target.value;catalogPage=1;catalog()}};

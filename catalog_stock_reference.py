@@ -1,7 +1,7 @@
-"""Unverified catalog stock reference from user-supplied supplier-register CSV.
+"""User-confirmed physical inventory with explicit packaging rules and source provenance.
 
-This module intentionally NEVER modifies products.stock or sample_uat_balances.
-No unit is inferred. Values are informational, not available-to-promise stock.
+The physical reconciliation is performed once by an audited migration, not at request time.
+No UoM is inferred for types other than Powder, Paste, Liquid.
 """
 from fastapi import Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -27,6 +27,31 @@ def install_stock_reference_schema(db):
       verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
       imported_at TEXT NOT NULL)""")
     db.execute("CREATE INDEX IF NOT EXISTS idx_catalog_stock_reference_status ON catalog_stock_reference(verification_status)")
+    db.execute("""CREATE TABLE IF NOT EXISTS physical_inventory_stock(
+      sku TEXT PRIMARY KEY,
+      product_type TEXT NOT NULL,
+      qty_packages NUMERIC(18,3) NOT NULL CHECK (qty_packages>=0),
+      package_uom TEXT NOT NULL,
+      package_content NUMERIC(18,3),
+      content_uom TEXT,
+      dispatch_uom_status TEXT NOT NULL,
+      confirmation_status TEXT NOT NULL,
+      source_sha256 TEXT NOT NULL,
+      confirmed_at TEXT NOT NULL
+    )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS physical_stock_confirmation(
+      source_sha256 TEXT PRIMARY KEY,
+      confirmation_text TEXT NOT NULL,
+      confirmed_at TEXT NOT NULL,
+      confirmed_skus INTEGER NOT NULL,
+      package_rules TEXT NOT NULL
+    )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS physical_stock_before_snapshot(
+      source_sha256 TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      prior_stock NUMERIC(18,3),
+      PRIMARY KEY(source_sha256,sku)
+    )""")
 
 def mount_stock_reference(app,current,get_db):
     @app.get("/v1/catalog/stock-reference")
@@ -42,21 +67,36 @@ def mount_stock_reference(app,current,get_db):
         param=("%"+q+"%",)
         where="WHERE LOWER(s.sku) LIKE ? OR LOWER(p.name) LIKE ?" if q else ""
         args=(param[0],param[0]) if q else ()
+        physical=db.execute("""SELECT COUNT(*) AS physical_skus,
+          COALESCE(SUM(qty_packages),0) AS packages_total,
+          COUNT(*) FILTER(WHERE dispatch_uom_status='UNIT_DEFINED') AS mapped_skus,
+          COUNT(*) FILTER(WHERE dispatch_uom_status='UOM_PENDING') AS pending_skus
+          FROM physical_inventory_stock""").fetchone()
         summary=db.execute("""SELECT COUNT(*) AS sku_count,
           COALESCE(SUM(reported_stock),0) AS reported_total,
           COUNT(*) FILTER (WHERE verification_status='UNVERIFIED') AS unverified_skus
           FROM catalog_stock_reference""").fetchone()
         count=db.execute("""SELECT COUNT(*) AS n FROM catalog_stock_reference s
            JOIN products p ON p.sku=s.sku """+where,args).fetchone()["n"]
-        rows=db.execute("""SELECT s.sku,p.name AS product,s.reported_stock,s.unit,
-          s.source_ref,s.verification_status,s.pdf_page,s.pdf_row,
-          p.stock AS legacy_product_stock
+        rows=db.execute("""SELECT s.sku,p.name AS product,
+          d.product_type,
+          s.reported_stock,s.unit,s.source_ref,s.verification_status,
+          s.pdf_page,s.pdf_row,p.stock AS legacy_product_stock,
+          v.qty_packages AS physical_packages,v.package_uom,
+          v.package_content,v.content_uom,
+          v.dispatch_uom_status,v.confirmation_status
           FROM catalog_stock_reference s JOIN products p ON p.sku=s.sku
+          LEFT JOIN catalog_product_details d ON d.sku=s.sku
+          LEFT JOIN physical_inventory_stock v ON v.sku=s.sku
           """+where+""" ORDER BY s.sku LIMIT ? OFFSET ?""",args+(limit,offset)).fetchall()
         return {
             "rows":[dict(r) for r in rows],
             "total_matching":count,
             "sku_count":summary["sku_count"],
+            "physical_confirmed_skus":physical["physical_skus"],
+            "physical_packages_total":physical["packages_total"],
+            "physical_uom_defined_skus":physical["mapped_skus"],
+            "physical_uom_pending_skus":physical["pending_skus"],
             "reported_total":summary["reported_total"],
             "unverified_skus":summary["unverified_skus"],
             "source_file":"Liliang_Report_catalog_updated.csv",
@@ -64,10 +104,14 @@ def mount_stock_reference(app,current,get_db):
             "source_generated_utc":"2026-10-30T03:28:46.628726+00:00",
             "source_status":"CATALOG-PDF-UNVERIFIED",
             "unit_status":"UNSPECIFIED",
-            "stock_status":"REFERENCE_ONLY_NOT_PHYSICAL",
-            "changes_company_stock":False,
-            "dispatch_eligible":False,
-            "note":"Angka stock berasal dari CSV katalog yang belum diverifikasi; satuan tidak tercantum. Tidak dapat digunakan sebagai stok fisik untuk Surat Jalan.",
+            "stock_status":"USER_CONFIRMED_PHYSICAL" if physical["physical_skus"]==summary["sku_count"] and summary["sku_count"] else "REFERENCE_ONLY_NOT_PHYSICAL",
+            "changes_company_stock":bool(physical["physical_skus"]),
+            "dispatch_eligible":False, # Legacy sample module still uses virtual UAT balances, not physical dispatch.
+            "note":("Persediaan fisik dinyatakan tersedia oleh pengguna 6 Nov 2026; "
+                    "aturan kemasan hanya Powder 300g/unit, Paste 200ml/botol, Liquid 500ml/dirigen. "
+                    "SKU lain menunggu aturan UoM. Pengiriman fisik belum aktif karena workflow Surat Jalan "
+                    "masih berupa UAT dan memakai saldo stok virtual.") if physical["physical_skus"] else
+                   "CSV belum mendapat pengesahan stok fisik.",
         }
 
     @app.get("/stock/reference",response_class=HTMLResponse,include_in_schema=False)
@@ -79,7 +123,7 @@ def mount_stock_reference(app,current,get_db):
 
 STOCK_PAGE=r"""<!doctype html><html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PT Liliang · Stok Referensi CSV</title><link rel="icon" href="/branding/logo?v=20261020">
+<title>PT Liliang · Stok Fisik & Kemasan</title><link rel="icon" href="/branding/logo?v=20261020">
 <style>
 :root{font:14px/1.5 system-ui,Segoe UI,Arial;background:#f3f7fc;color:#17324c}
 *{box-sizing:border-box}body{margin:0}header{background:#102545;color:#fff;padding:16px 6%;display:flex;align-items:center;gap:18px}
@@ -97,17 +141,16 @@ th{background:#eff4fb}.badge{background:#fff2dd;color:#855a16;font-weight:bold;f
 @media(max-width:700px){header{display:block}main{padding:0 13px}.card{padding:16px}}
 </style></head><body>
 <header><img src="/branding/logo?v=20261020" alt="PT Liliang International">
-<div><strong>ERP Multi-AI · Stock Reference Register</strong><div style="font-size:12px;color:#b8d0ec">Penelitian · Import CSV UAT · Tanpa perubahan stok fisik</div></div></header>
-<main><p><a href="/workspace">Multi-AI Workspace</a> › <a href="/transactions">Transaksi & Approval</a> › Stok Referensi CSV</p>
-<h1>Referensi Stok dari CSV</h1>
-<div class="notice"><b>Belum diverifikasi.</b> Angka dalam kolom Stock berasal dari katalog pemasok, satuan tidak diberikan,
-dan tidak merepresentasikan stok fisik siap kirim. Gudang harus memakai saldo UAT terpisah untuk simulasi, atau stok fisik yang telah diverifikasi dalam implementasi produksi.</div>
+<div><strong>ERP Multi-AI · Stock Reference Register</strong><div style="font-size:12px;color:#b8d0ec">Persediaan dikonfirmasi · 6 Nov 2026 · Per kemasan</div></div></header>
+<main><p><a href="/workspace">Multi-AI Workspace</a> › <a href="/transactions">Transaksi & Approval</a> › Stok Fisik & Kemasan</p>
+<h1>Persediaan Fisik & Kemasan</h1>
+<div class="notice"><b>Stok fisik dikonfirmasi pengguna, 6 November 2026.</b> Jumlah dihitung per kemasan, bukan otomatis KG/L. Powder: 300 gram/unit; Paste: 200 ml/botol; Liquid: 500 ml/dirigen. Sebanyak 487 SKU kategori lain masih menunggu aturan kemasan. <b>Catatan:</b> alur Surat Jalan ERP saat ini tetap UAT virtual, belum mengurangi stok fisik ini.</div>
 <section class="card"><div class="row" id="metrics"></div><p class="muted" id="source"></p></section>
 <section class="card"><label for="search">Cari SKU / Nama Flavor</label>
 <div class="row"><input id="search" placeholder="Contoh: strawberry / 11100029" autocomplete="off">
 <button id="searchBtn">Cari SKU</button><button id="clearBtn" class="btn-alt">Reset</button></div>
 <p id="error" role="alert"></p><div class="tablewrap"><table>
-<thead><tr><th>SKU</th><th>Nama Flavor</th><th>Stock (angka CSV)</th><th>Satuan</th><th>Verifikasi</th><th>Referensi PDF</th></tr></thead>
+<thead><tr><th>SKU</th><th>Nama Flavor</th><th>Jenis</th><th>Stok Fisik</th><th>Satuan Kemasan</th><th>Isi / Kemasan</th><th>Status Kemasan</th></tr></thead>
 <tbody id="items"></tbody></table></div><p id="pagination"></p>
 <div class="row"><button class="btn-alt" id="prev">Sebelumnya</button><button class="btn-alt" id="next">Berikutnya</button></div>
 </section></main><script>
@@ -123,14 +166,17 @@ async function load(){
  {headers:{Authorization:"Bearer "+token},cache:"no-store"});
  let data=await r.json();
  if(!r.ok)throw Error(data.detail||"Gagal mengambil referensi stok");
- $("metrics").innerHTML='<div class="metric"><span>SKU dalam Referensi</span><b>'+n(data.sku_count)+
- '</b></div><div class="metric"><span>Total Nilai Stock CSV</span><b>'+n(data.reported_total)+
- '</b></div><div class="metric"><span>Belum Diverifikasi</span><b>'+n(data.unverified_skus)+'</b></div>';
- $("source").textContent="Sumber: "+data.source_file+" · "+data.source_status+" · Satuan: BELUM DIKETAHUI";
+ $("metrics").innerHTML='<div class="metric"><span>SKU Stok Fisik Dikonfirmasi</span><b>'+n(data.physical_confirmed_skus)+
+ '</b></div><div class="metric"><span>Total Kemasan (Campuran UoM)</span><b>'+n(data.physical_packages_total)+
+ '</b></div><div class="metric"><span>UoM Ditetapkan</span><b>'+n(data.physical_uom_defined_skus)+
+ '</b></div><div class="metric"><span>UoM Belum Ditetapkan</span><b>'+n(data.physical_uom_pending_skus)+'</b></div>';
+ $("source").textContent="Dokumen: "+data.source_file+" · Katalog sumber "+data.source_status+" · Konfirmasi fisik: "+data.stock_status;
  $("items").innerHTML=data.rows.map(x=>'<tr><td>'+safe(x.sku)+'</td><td>'+safe(x.product)+'</td>'+
- '<td>'+n(x.reported_stock)+'</td><td>UNSPECIFIED</td><td><span class="badge">'+
- safe(x.verification_status)+'</span></td><td>Page '+safe(x.pdf_page)+' / Row '+safe(x.pdf_row)+'</td></tr>').join("");
- if(!data.rows.length)$("items").innerHTML='<tr><td colspan="6">Tidak ditemukan.</td></tr>';
+ '<td>'+safe(x.product_type||"UNKNOWN")+'</td><td>'+n(x.physical_packages??x.reported_stock)+'</td>'+
+ '<td>'+safe(x.package_uom||"BELUM DITETAPKAN")+'</td>'+
+ '<td>'+safe(x.package_content??"–")+' '+safe(x.content_uom||"")+'</td>'+
+ '<td><span class="badge">'+safe(x.dispatch_uom_status||"PENDING")+'</span></td></tr>').join("");
+ if(!data.rows.length)$("items").innerHTML='<tr><td colspan="7">Tidak ditemukan.</td></tr>';
  $("pagination").textContent="Menampilkan "+(data.rows.length?offset+1:0)+"–"+(offset+data.rows.length)+" dari "+n(data.total_matching)+" SKU";
  $("prev").disabled=offset===0;$("next").disabled=offset+limit>=Number(data.total_matching);
  $("error").textContent="";
