@@ -117,6 +117,11 @@ def _as_transaction(db,inquiry,sample,user):
     if sample and sample.get("product_id"):
         row=db.execute("SELECT sku,name,source_ref FROM products WHERE id=?",(sample["product_id"],)).fetchone()
         if row:selected=dict(row)
+    stock_reference=None
+    if selected:
+        reported=db.execute("""SELECT reported_stock,unit,verification_status,source_ref
+          FROM catalog_stock_reference WHERE sku=?""",(selected["sku"],)).fetchone()
+        if reported:stock_reference=dict(reported)
     events=[dict(x) for x in db.execute("""SELECT action,actor_role,at FROM transaction_events
         WHERE (entity='inquiry' AND entity_id=?) OR (entity='sample_request' AND entity_id=?)
         ORDER BY at DESC LIMIT 30""",(str(inquiry["id"]),str(inquiry["id"]))).fetchall()]
@@ -128,6 +133,7 @@ def _as_transaction(db,inquiry,sample,user):
         "inquiry":visible,"sample":sample,"latest_run":run if user["role"]!="gudang" else None,
         "candidates":candidates,"selected_product":selected,
         "virtual_stock_kg":_balance(db,selected["sku"]) if selected else None,
+        "csv_stock_reference":stock_reference,
         "timeline": STEPS,"current_step":_status_index(inquiry,sample),
         "activity":events,"scope":"UAT_VIRTUAL_STOCK_NOT_REAL_COMPANY_WAREHOUSE",
         "actual_stock_verified":False,"valid_for_physical_shipment":False,
@@ -458,7 +464,9 @@ function renderDetail(){
  '<section class="card"><h2>Sample Request</h2><p><b>SKU Terpilih:</b> '+esc(selected?.sku||"Menunggu Technical")+
  '</p><p><b>Qty:</b> '+esc(s?.qty_kg||"—")+' KG</p><p><b>Penerima:</b> '+esc(s?.recipient||"—")+
  '</p><p><b>Tujuan:</b> '+esc(s?.destination||"—")+'</p><p><b>Stok virtual:</b> '+
- esc(d.virtual_stock_kg??"Belum tersedia")+' KG</p></section></div>';
+ esc(d.virtual_stock_kg??"Belum tersedia")+' KG (UAT)</p><p><b>Stok laporan CSV:</b> '+
+ esc(d.csv_stock_reference?.reported_stock??"Tidak tercatat")+
+ ' (satuan belum ditentukan; UNVERIFIED)</p><p class="muted"><a href="/stock/reference">Lihat semua stok referensi CSV →</a></p></section></div>';
  }else if(currentTab==="matching"){
  content='<section class="card"><h2>AI-02 Candidate Top-5 · BM25</h2><p class="muted">Nilai BM25 bukan probabilitas kelayakan. Technical ACCEPT wajib label 3.</p>'+
  '<table><tr><th>Rank</th><th>SKU</th><th>Produk</th><th>Score</th><th>Technical</th></tr>'+
