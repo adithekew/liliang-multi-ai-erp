@@ -3,6 +3,9 @@
 No access to Neon or operational tables. Groq is optional and defaults OFF.
 """
 import os
+import importlib.util
+import threading
+from datetime import datetime, timezone
 from typing import Literal
 from fastapi import Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -29,6 +32,36 @@ SYNTHETIC_PRODUCTS = [
     ], 1)
 ]
 AUTHORIZED_ROLES = {"admin", "sales", "technical", "manager"}
+_QUOTA_LOCK = threading.Lock()
+_GROQ_UAT_QUOTA = {"day": None, "used": 0}
+
+def _daily_cap():
+    try:
+        return max(1, min(20, int(os.getenv("AI_AGENT_DAILY_CAP", "10"))))
+    except (TypeError, ValueError):
+        return 10
+
+def _quota_snapshot():
+    with _QUOTA_LOCK:
+        day = datetime.now(timezone.utc).date().isoformat()
+        if _GROQ_UAT_QUOTA["day"] != day:
+            _GROQ_UAT_QUOTA.update(day=day, used=0)
+        return {"daily_uat_cap": _daily_cap(), "attempts_used": _GROQ_UAT_QUOTA["used"],
+                "attempts_remaining": max(0, _daily_cap() - _GROQ_UAT_QUOTA["used"])}
+
+def _reserve_uat_attempt():
+    with _QUOTA_LOCK:
+        day = datetime.now(timezone.utc).date().isoformat()
+        if _GROQ_UAT_QUOTA["day"] != day:
+            _GROQ_UAT_QUOTA.update(day=day, used=0)
+        if _GROQ_UAT_QUOTA["used"] >= _daily_cap():
+            return False
+        _GROQ_UAT_QUOTA["used"] += 1
+        return True
+
+def _sdk_available():
+    return importlib.util.find_spec("pydantic_ai") is not None
+
 
 class DemoInput(BaseModel):
     case_id: Literal["STRAWBERRY_DAIRY", "MANGO_BEVERAGE", "VANILLA_BAKERY",
@@ -63,7 +96,7 @@ def snapshot(case_id: str) -> dict:
 
 def external_enabled():
     return (os.getenv("AI_AGENT_EXTERNAL_ENABLED", "false").lower() == "true"
-            and bool(os.getenv("GROQ_API_KEY")))
+            and bool(os.getenv("GROQ_API_KEY")) and _sdk_available())
 
 def status_info():
     return {
@@ -71,12 +104,18 @@ def status_info():
         "framework": "PydanticAI (optional)",
         "groq_model": "openai/gpt-oss-20b",
         "local": "AVAILABLE_RP0_NO_API",
-        "groq": "ENABLED_SYNTHETIC_ONLY" if external_enabled() else "DISABLED",
+        "groq": "CONFIGURED_SYNTHETIC_ONLY" if external_enabled() else "DISABLED",
+        "sdk_installed": _sdk_available(),
+        "api_key_present": bool(os.getenv("GROQ_API_KEY")),
+        "opt_in": os.getenv("AI_AGENT_EXTERNAL_ENABLED", "false").lower() == "true",
+        "uat_request_budget": _quota_snapshot(),
+        "free_plan_must_be_verified_by_account_owner": True,
         "case_ids": list(CASES),
         "company_database_access": False, "company_database_mutation": False,
         "can_approve": False, "company_data_egress": False,
         "paid_provider_fallback": False,
-        "disclaimer": "Groq requires verified Free account; no paid usage controls are implemented.",
+        "disclaimer": ("Research UAT only; no company data sent. Use a Free account only. "
+                       "Per-process request guard is NOT a financial billing guarantee."),
     }
 
 async def groq_explain(data: dict) -> str:
@@ -137,7 +176,9 @@ def mount_agent(app, current):
         data = snapshot(request.case_id)
         if request.provider == "groq":
             if not external_enabled():
-                raise HTTPException(409, "Groq disabled; local synthetic mode available")
+                raise HTTPException(409, "Groq not configured; set Free key and opt-in in Render")
+            if not _reserve_uat_attempt():
+                raise HTTPException(429, "Daily UAT request cap reached; use local mode")
             try:
                 explanation = await groq_explain(data)
             except Exception:
@@ -183,7 +224,10 @@ let data=await r.json();if(!r.ok)throw Error(data.detail||"Request failed");retu
 async function start(){if(!token){el("status").textContent="Login ERP terlebih dahulu.";el("run").disabled=true;return;}
 try{let s=await api("/v1/agent/status");for(const id of s.case_ids){let o=document.createElement("option");
 o.value=id;o.textContent=id;el("scenario").appendChild(o);}
-el("status").textContent="Local tersedia · Groq: "+s.groq;}
+el("status").textContent="Local tersedia · Groq: "+s.groq+
+" · SDK: "+(s.sdk_installed?"Siap":"Belum")+
+" · API key: "+(s.api_key_present?"Ada":"Belum")+
+" · Sisa sesi UAT: "+s.uat_request_budget.attempts_remaining;}
 catch(e){el("status").textContent=e.message;el("run").disabled=true;}}
 el("run").onclick=async()=>{el("run").disabled=true;
 try{let r=await api("/v1/agent/demo",{method:"POST",body:JSON.stringify({
