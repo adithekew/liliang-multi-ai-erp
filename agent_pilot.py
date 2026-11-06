@@ -96,7 +96,7 @@ def snapshot(case_id: str) -> dict:
 
 def external_enabled():
     return (os.getenv("AI_AGENT_EXTERNAL_ENABLED", "false").lower() == "true"
-            and bool(os.getenv("GROQ_API_KEY")))
+            and bool(os.getenv("GROQ_API_KEY")) and _sdk_available())
 
 def status_info():
     return {
@@ -104,12 +104,18 @@ def status_info():
         "framework": "PydanticAI (optional)",
         "groq_model": "openai/gpt-oss-20b",
         "local": "AVAILABLE_RP0_NO_API",
-        "groq": "ENABLED_SYNTHETIC_ONLY" if external_enabled() else "DISABLED",
+        "groq": "CONFIGURED_SYNTHETIC_ONLY" if external_enabled() else "DISABLED",
+        "sdk_installed": _sdk_available(),
+        "api_key_present": bool(os.getenv("GROQ_API_KEY")),
+        "opt_in": os.getenv("AI_AGENT_EXTERNAL_ENABLED", "false").lower() == "true",
+        "uat_request_budget": _quota_snapshot(),
+        "free_plan_must_be_verified_by_account_owner": True,
         "case_ids": list(CASES),
         "company_database_access": False, "company_database_mutation": False,
         "can_approve": False, "company_data_egress": False,
         "paid_provider_fallback": False,
-        "disclaimer": "Groq requires verified Free account; no paid usage controls are implemented.",
+        "disclaimer": ("Research UAT only; no company data sent. Use a Free account only. "
+                       "Per-process request guard is NOT a financial billing guarantee."),
     }
 
 async def groq_explain(data: dict) -> str:
