@@ -3,6 +3,9 @@
 No access to Neon or operational tables. Groq is optional and defaults OFF.
 """
 import os
+import importlib.util
+import threading
+from datetime import datetime, timezone
 from typing import Literal
 from fastapi import Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -29,6 +32,36 @@ SYNTHETIC_PRODUCTS = [
     ], 1)
 ]
 AUTHORIZED_ROLES = {"admin", "sales", "technical", "manager"}
+_QUOTA_LOCK = threading.Lock()
+_GROQ_UAT_QUOTA = {"day": None, "used": 0}
+
+def _daily_cap():
+    try:
+        return max(1, min(20, int(os.getenv("AI_AGENT_DAILY_CAP", "10"))))
+    except (TypeError, ValueError):
+        return 10
+
+def _quota_snapshot():
+    with _QUOTA_LOCK:
+        day = datetime.now(timezone.utc).date().isoformat()
+        if _GROQ_UAT_QUOTA["day"] != day:
+            _GROQ_UAT_QUOTA.update(day=day, used=0)
+        return {"daily_uat_cap": _daily_cap(), "attempts_used": _GROQ_UAT_QUOTA["used"],
+                "attempts_remaining": max(0, _daily_cap() - _GROQ_UAT_QUOTA["used"])}
+
+def _reserve_uat_attempt():
+    with _QUOTA_LOCK:
+        day = datetime.now(timezone.utc).date().isoformat()
+        if _GROQ_UAT_QUOTA["day"] != day:
+            _GROQ_UAT_QUOTA.update(day=day, used=0)
+        if _GROQ_UAT_QUOTA["used"] >= _daily_cap():
+            return False
+        _GROQ_UAT_QUOTA["used"] += 1
+        return True
+
+def _sdk_available():
+    return importlib.util.find_spec("pydantic_ai") is not None
+
 
 class DemoInput(BaseModel):
     case_id: Literal["STRAWBERRY_DAIRY", "MANGO_BEVERAGE", "VANILLA_BAKERY",
