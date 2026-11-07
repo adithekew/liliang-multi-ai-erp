@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from multi_ai import interpret, score_products, bundling_rules, forecast_baseline
 from agent_inventory import CatalogPreviewRequest, catalog_preview, inventory_lookup, local_readiness
+from agent_inquiry import list_inquiries, inquiry_advice
 
 CASES = {
     "STRAWBERRY_DAIRY": "Butuh strawberry flavor untuk minuman susu dairy",
@@ -210,6 +211,22 @@ def mount_agent(app, current, get_db):
             raise HTTPException(404, "SKU not found")
         return result
 
+    @app.get("/v1/agent/inquiries")
+    def saved_inquiries(
+        limit:int=Query(default=50,ge=1,le=100),
+        u=Depends(current),db=Depends(get_db)
+    ):
+        return list_inquiries(db,u,limit)
+
+    @app.get("/v1/agent/inquiry/{iid}/advice")
+    def saved_inquiry_advice(
+        iid:int,u=Depends(current),db=Depends(get_db)
+    ):
+        if iid<1:
+            raise HTTPException(422,"Invalid inquiry identifier")
+        # Existing authorized ERP data ONLY. Never forwards prompt to Groq.
+        return inquiry_advice(db,iid,u)
+
     @app.post("/v1/agent/demo")
     async def demo(request: DemoInput, u=Depends(current)):
         if u["role"] not in AUTHORIZED_ROLES:
@@ -232,6 +249,11 @@ def mount_agent(app, current, get_db):
         return {"mode": "LOCAL_RP0_NO_LLM", "llm_unverified": None,
                 "tool_trace": [], "all_four_tools_called": False,
                 "snapshot": data, "persisted": False}
+
+    @app.get("/ai/inquiry-advisor", response_class=HTMLResponse, include_in_schema=False)
+    def inquiry_advisor_page():
+        from agent_inquiry_ui import PAGE as inquiry_page
+        return HTMLResponse(inquiry_page, headers={"Cache-Control":"private, no-store"})
 
     @app.get("/ai/agent-pilot", response_class=HTMLResponse, include_in_schema=False)
     def page():

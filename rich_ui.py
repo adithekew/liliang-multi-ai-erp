@@ -68,7 +68,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // Only the short-lived JWT is in tab-scoped sessionStorage. No SKU, inquiry,
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
- hub:"/workspace",agent:"/ai/agent-pilot",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
+ hub:"/workspace",agent:"/ai/agent-pilot",agentadvisor:"/ai/inquiry-advisor",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
  overview:"/dashboard",inquiries:"/inquiries",transactions:"/transactions",catalog:"/catalog",stockreference:"/stock/reference",wms:"/wms/sandbox",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
@@ -179,6 +179,7 @@ function loginScreen(message=""){
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
  ["agent","✧","AI Agent Orchestrator","AI MODULES"],
+ ["agentadvisor","◈","Inquiry Intelligence Advisor","AI MODULES"],
  ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
  ["research","▤","AI Research Evidence","AI MODULES"],
  ["systems","◉","AI System Status","AI MODULES"],
@@ -201,7 +202,7 @@ const menu=[
 function allowed(key){
  if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
  if(key==="reports")return true;
- if(key==="hybrid"||key==="agent")return ["admin","sales","technical","manager"].includes(me.role);
+ if(key==="hybrid"||key==="agent"||key==="agentadvisor")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research"||key==="datareadiness")return ["admin","technical","manager"].includes(me.role);
  if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
