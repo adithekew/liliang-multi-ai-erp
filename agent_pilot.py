@@ -7,10 +7,11 @@ import importlib.util
 import threading
 from datetime import datetime, timezone
 from typing import Literal
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from multi_ai import interpret, score_products, bundling_rules, forecast_baseline
+from agent_inventory import CatalogPreviewRequest, catalog_preview, inventory_lookup, local_readiness
 
 CASES = {
     "STRAWBERRY_DAIRY": "Butuh strawberry flavor untuk minuman susu dairy",
@@ -111,7 +112,7 @@ def status_info():
         "uat_request_budget": _quota_snapshot(),
         "free_plan_must_be_verified_by_account_owner": True,
         "case_ids": list(CASES),
-        "company_database_access": False, "company_database_mutation": False,
+        "company_database_access": "READ_ONLY_LOCAL_TOOLS", "company_database_mutation": False,
         "can_approve": False, "company_data_egress": False,
         "paid_provider_fallback": False,
         "disclaimer": ("Research UAT only; no company data sent. Use a Free account only. "
@@ -175,12 +176,39 @@ async def groq_explain(data: dict) -> str:
         "all_four_tools_called": set(tool_log) == {"AI-01", "AI-02", "AI-03", "AI-04"},
     }
 
-def mount_agent(app, current):
+def mount_agent(app, current, get_db):
     @app.get("/v1/agent/status")
     def status(u=Depends(current)):
         if u["role"] not in AUTHORIZED_ROLES:
             raise HTTPException(403, "Role access denied")
         return status_info()
+
+    @app.get("/v1/agent/readiness")
+    def readiness(u=Depends(current), db=Depends(get_db)):
+        if u["role"] not in AUTHORIZED_ROLES:
+            raise HTTPException(403, "Role access denied")
+        readiness = local_readiness(db, CASES, snapshot)
+        readiness["groq_configured"] = external_enabled()
+        readiness["remote_inference_checked"] = False
+        return readiness
+
+    @app.post("/v1/agent/catalog-preview")
+    def preview(request: CatalogPreviewRequest, u=Depends(current), db=Depends(get_db)):
+        if u["role"] not in AUTHORIZED_ROLES:
+            raise HTTPException(403, "Role access denied")
+        # Deliberately not passed to groq_explain or any external SDK.
+        return catalog_preview(db, request.case_id, CASES)
+
+    @app.get("/v1/agent/stock/{sku}")
+    def stock(sku: str, u=Depends(current), db=Depends(get_db)):
+        if u["role"] not in AUTHORIZED_ROLES:
+            raise HTTPException(403, "Role access denied")
+        if len(sku) > 90:
+            raise HTTPException(422, "SKU too long")
+        result = inventory_lookup(db, sku)
+        if not result:
+            raise HTTPException(404, "SKU not found")
+        return result
 
     @app.post("/v1/agent/demo")
     async def demo(request: DemoInput, u=Depends(current)):

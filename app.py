@@ -443,7 +443,7 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
 from agent_pilot import mount_agent
-mount_agent(app,current)
+mount_agent(app,current,get_db)
 from wms_demo import mount_wms_demo
 mount_wms_demo(app,current,get_db,audit)
 from sales_intelligence import mount_sales_intelligence

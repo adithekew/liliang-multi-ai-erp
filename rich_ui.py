@@ -68,7 +68,7 @@ const escapeHtml=(s)=>String(s===undefined||s===null?"":s).replace(/[&<>"']/g,c=
 // Only the short-lived JWT is in tab-scoped sessionStorage. No SKU, inquiry,
 // research metrics, or transaction records are stored/cached on the device.
 const PAGE_URLS={
- hub:"/workspace",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
+ hub:"/workspace",agent:"/ai/agent-pilot",hybrid:"/ai/hybrid",research:"/ai/evidence",systems:"/ai/status",datareadiness:"/ai/data-readiness",learning:"/learning/center",
  overview:"/dashboard",inquiries:"/inquiries",transactions:"/transactions",catalog:"/catalog",stockreference:"/stock/reference",wms:"/wms/sandbox",
  bundling:"/sales/bundling",forecast:"/inventory/forecast",
  users:"/admin/users",roles:"/admin/roles",migration:"/admin/catalog-migration",
@@ -178,6 +178,7 @@ function loginScreen(message=""){
 }
 const menu=[
  ["hub","◈","Multi-AI Workspace","AI MODULES"],
+ ["agent","✧","AI Agent Orchestrator","AI MODULES"],
  ["hybrid","✦","Hybrid Semantic Lab","AI MODULES"],
  ["research","▤","AI Research Evidence","AI MODULES"],
  ["systems","◉","AI System Status","AI MODULES"],
@@ -200,7 +201,7 @@ const menu=[
 function allowed(key){
  if(["users","roles","migration","audit"].includes(key))return me.role==="admin";
  if(key==="reports")return true;
- if(key==="hybrid")return ["admin","sales","technical","manager"].includes(me.role);
+ if(key==="hybrid"||key==="agent")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="research"||key==="datareadiness")return ["admin","technical","manager"].includes(me.role);
  if(key==="inquiries")return ["admin","sales","technical","manager"].includes(me.role);
  if(key==="bundling")return ["admin","sales","manager"].includes(me.role);
@@ -214,7 +215,7 @@ function frame(){
   if(last!==x[3]){items+='<div class="menutitle">'+x[3]+'</div>';last=x[3]}
   items+='<a class="navitem '+(page===x[0]?"active":"")+'" href="'+PAGE_URLS[x[0]]+'"><span>'+x[1]+'</span>'+x[2]+'</a>';
  });
- $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand official-brand"><img class="official-sidebar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div class="official-brand-caption">ERP · MULTI-AI</div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div class="topbar-official"><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><img class="official-topbar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Demo AI-03/04 menggunakan data sintetis; analitik dari order perusahaan yang terdaftar dipisahkan secara eksplisit. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Belum ada online neural encoder untuk inquiry bebas, LLM, fine-tuning data perusahaan, atau hasil akurasi validasi pakar. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
+ $("root").innerHTML='<div class="layout"><aside class="sidebar" id="side"><div class="brand official-brand"><img class="official-sidebar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div class="official-brand-caption">ERP · MULTI-AI</div></div>'+items+'<div class="sidefoot">◉ CLOUD RESEARCH PILOT<br>Version 0.8 · secure sessions + reports<br><span style="color:#58e3c9">● Services available</span></div></aside><div class="main"><header class="topbar"><div class="topbar-official"><button class="btn secondary mobilemenu" onclick="toggleMenu()">☰</button><img class="official-topbar-logo" src="/branding/logo?v=20261020" alt="PT. Liliang International"><div><strong>Enterprise Intelligence Platform</strong><div class="fine">B2B Flavor · Integrated Workflow & Research</div></div></div><div class="topright"><span class="rolepill">'+escapeHtml(me.role.toUpperCase())+'</span><span class="avatar">'+escapeHtml(me.name[0]||"U")+'</span><span class="fine">Idle timeout: 15 menit</span><button class="btn secondary" onclick="logout()">Keluar</button></div></header><main class="content"><div class="warning"><strong>RESEARCH PILOT — SUMBER DATA DIVERIFIKASI PER MODUL:</strong> Katalog dapat bersumber dari PDF pemasok yang diimpor Admin atau data sintetis; cek label sumber pada Product Catalog. Demo AI-03/04 menggunakan data sintetis; analitik dari order perusahaan yang terdaftar dipisahkan secara eksplisit. AI-01 NLP berbasis aturan dan matching inquiry bebas masih BM25; pretrained multilingual MiniLM 384-D + RRF <strong>SUDAH dijalankan</strong> di Hybrid Lab untuk 10 query sintetis yang diproses offline. Encoder neural online untuk inquiry bebas dan fine-tuning data perusahaan belum tersedia. LLM Groq sudah terintegrasi dalam AI Agent Orchestrator untuk kasus evaluasi terkontrol; validasi pakar masih diperlukan. <button class="btn secondary" style="margin-left:9px" onclick="navigate(\'systems\')">Lihat status AI & Database →</button></div><div id="view"></div></main></div></div>';
  // Sidebar links now trigger distinct HTTP GET pages (supports deep links & refresh).
 }
 function toggleMenu(){$("side").classList.toggle("open")}
