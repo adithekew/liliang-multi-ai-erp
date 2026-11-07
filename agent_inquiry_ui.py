@@ -79,7 +79,7 @@ ul{padding-left:20px;margin:4px 0;font-size:12px}.flag{color:#8d5b1a;font-size:1
 <script>
 const token=sessionStorage.getItem("liliang_token")||"";
 const el=id=>document.getElementById(id);
-const esc=s=>String(s===null||s===undefined?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;":"&quot;","'":"&#39;"}[c]));
+const esc=s=>String(s===null||s===undefined?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=x=>Number(x).toLocaleString("id-ID",{maximumFractionDigits:3});
 const q=new URLSearchParams(location.search),selected=String(q.get("inquiry_id")||"");
 async function api(url){
