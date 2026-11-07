@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from multi_ai import interpret, score_products, bundling_rules, forecast_baseline
 from agent_inventory import CatalogPreviewRequest, catalog_preview, inventory_lookup, local_readiness
+from agent_inquiry import list_inquiries, inquiry_advice
 
 CASES = {
     "STRAWBERRY_DAIRY": "Butuh strawberry flavor untuk minuman susu dairy",
@@ -209,6 +210,22 @@ def mount_agent(app, current, get_db):
         if not result:
             raise HTTPException(404, "SKU not found")
         return result
+
+    @app.get("/v1/agent/inquiries")
+    def saved_inquiries(
+        limit:int=Query(default=50,ge=1,le=100),
+        u=Depends(current),db=Depends(get_db)
+    ):
+        return list_inquiries(db,u,limit)
+
+    @app.get("/v1/agent/inquiry/{iid}/advice")
+    def saved_inquiry_advice(
+        iid:int,u=Depends(current),db=Depends(get_db)
+    ):
+        if iid<1:
+            raise HTTPException(422,"Invalid inquiry identifier")
+        # Existing authorized ERP data ONLY. Never forwards prompt to Groq.
+        return inquiry_advice(db,iid,u)
 
     @app.post("/v1/agent/demo")
     async def demo(request: DemoInput, u=Depends(current)):
