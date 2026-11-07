@@ -63,7 +63,7 @@ class AgentPilotTest(unittest.TestCase):
                     page=c.get("/ai/agent-pilot")
                     self.assertEqual(page.status_code,200)
                     self.assertIn("Satu Agent. Empat Kapabilitas AI.",page.text)
-                    self.assertIn("dataset evaluasi terkontrol",page.text.lower())
+                    self.assertIn("katalog evaluasi terkontrol",page.text.lower())
                     self.assertNotIn("rp0",page.text.lower())
                     self.assertNotIn("sintetis",page.text.lower())
                     self.assertEqual(c.get("/v1/agent/status",headers=h).status_code,200)
