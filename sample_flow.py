@@ -535,7 +535,7 @@ function renderDetail(){
  form("salesRevise",'<label>Revisi Requirement</label><textarea name="requirement" minlength="5" required>'+
  esc(q.requirement)+'</textarea>','Revisi & Matching Ulang')+'</section>';
  }
- $("view").innerHTML='<h1>INQ-'+q.id+' '+badgeState(stage)+'</h1><p class="muted">Drafted by Sales · Online research workflow</p>'+
+ $("view").innerHTML='<h1>INQ-'+q.id+' '+badgeState(stage)+'</h1><p class="muted">Drafted by Sales · Online research workflow · <a href="/ai/inquiry-advisor?inquiry_id='+q.id+'">Buka AI Inquiry Advisor →</a></p>'+
  '<div class="tabs">'+["overview","matching","shipment","audit"].map(t=>tab(t,currentTab)).join("")+'</div>'+
  '<section class="card"><h2>Approval Timeline</h2>'+timeline+'</section>'+content+action;
  bindActions();
