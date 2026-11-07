@@ -250,6 +250,11 @@ def mount_agent(app, current, get_db):
                 "tool_trace": [], "all_four_tools_called": False,
                 "snapshot": data, "persisted": False}
 
+    @app.get("/ai/inquiry-advisor", response_class=HTMLResponse, include_in_schema=False)
+    def inquiry_advisor_page():
+        from agent_inquiry_ui import PAGE as inquiry_page
+        return HTMLResponse(inquiry_page, headers={"Cache-Control":"private, no-store"})
+
     @app.get("/ai/agent-pilot", response_class=HTMLResponse, include_in_schema=False)
     def page():
         return HTMLResponse(PAGE, headers={"Cache-Control": "private, no-store"})
