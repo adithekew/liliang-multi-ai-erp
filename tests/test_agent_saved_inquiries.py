@@ -2,6 +2,8 @@
 import os
 import tempfile
 import unittest
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -17,6 +19,16 @@ from agent_inquiry_ui import PAGE
 
 
 class SavedInquiryAdvisorTests(unittest.TestCase):
+    def test_advisor_javascript_is_valid(self):
+        if not shutil.which("node"):
+            self.skipTest("Node is not installed")
+        script=PAGE.split("<script>",1)[1].split("</script>",1)[0]
+        with tempfile.TemporaryDirectory(prefix="advisor_page_js_") as temp:
+            path=Path(temp)/"advisor.js"
+            path.write_text(script,encoding="utf-8")
+            check=subprocess.run(["node","--check",str(path)],text=True,capture_output=True)
+            self.assertEqual(check.returncode,0,check.stderr)
+
     def test_sales_to_manager_advice_no_write_and_latest_run(self):
         old=os.environ.get("DATABASE_PATH")
         try:
