@@ -7,6 +7,12 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
+# Disposable credentials for local CI only; must be set before importing app.
+os.environ.setdefault("APP_ENV","pilot")
+os.environ.setdefault("ADMIN_EMAIL","admin@test.local")
+os.environ.setdefault("ADMIN_PASSWORD","ci-unique-demo-12345")
+os.environ.setdefault("SECRET_KEY","CI-only-strong-nonproduction-signing-key-0123456789")
+
 from fastapi.testclient import TestClient
 from app import app, ADMIN_EMAIL, ADMIN_PASSWORD
 from persistence import connect
