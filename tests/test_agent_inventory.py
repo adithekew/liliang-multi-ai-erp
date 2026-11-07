@@ -1,7 +1,9 @@
 """Test Agent read-only inventory, RBAC, no external data transfer or stock mutations."""
 import os
+import asyncio
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +14,26 @@ from agent_dashboard_ui import PAGE
 
 
 class AgentLocalInventoryTests(unittest.TestCase):
+    def test_pydantic_agent_instrumentation_reports_actual_four_tools(self):
+        """No external Groq request; verifies instrumentation only."""
+        import pydantic_ai
+        from agent_pilot import groq_explain, snapshot
+        class FakeAgent:
+            def __init__(self,*args,**kwargs):
+                self.called=[]
+            def tool(self,fn):
+                self.called.append(fn)
+                return fn
+            async def run(self,*args,**kwargs):
+                for tool in self.called:
+                    tool(None)
+                return SimpleNamespace(output="Empat fungsi AI berhasil dipanggil")
+        with patch.object(pydantic_ai,"Agent",FakeAgent):
+            got=asyncio.run(groq_explain(snapshot("STRAWBERRY_DAIRY")))
+        self.assertEqual(got["tool_calls"],["AI-01","AI-02","AI-03","AI-04"])
+        self.assertTrue(got["all_four_tools_called"])
+        self.assertIn("Empat fungsi",got["explanation"])
+
     def test_real_catalog_preview_and_inventory_are_read_only(self):
         old=os.environ.get("DATABASE_PATH")
         old_external=os.environ.get("AI_AGENT_EXTERNAL_ENABLED")
