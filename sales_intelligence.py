@@ -13,7 +13,7 @@ from math import sin
 from typing import Literal
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SOURCE="COMPANY_ATTESTED"
 MIN_BASKETS=10
@@ -22,7 +22,11 @@ MIN_CONTIGUOUS_WEEKS=24
 class Item(BaseModel):
     sku: str=Field(min_length=3,max_length=80)
     qty: float=Field(gt=0,le=10000000)
-    unit: Literal['KG']  # all historical quantities must use one unit
+    unit: str=Field(min_length=1,max_length=24)
+    qty_kg_verified: float|None=Field(default=None,ge=0,le=10000000)
+    return_qty_kg: float=Field(default=0,ge=0,le=10000000)
+    line_status: Literal["CONFIRMED","CANCELLED","RETURNED","PARTIAL","OTHER"]="CONFIRMED"
+    kg_conversion_evidence_ref: str|None=Field(default=None,max_length=120)
     @field_validator("sku")
     @classmethod
     def valid_sku(cls,v):
@@ -30,11 +34,30 @@ class Item(BaseModel):
         if not re.fullmatch(r"[A-Z0-9][A-Z0-9._/-]{2,79}",v):
             raise ValueError("Invalid SKU format")
         return v
+    @field_validator("unit")
+    @classmethod
+    def valid_unit(cls,v):
+        v=v.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9._/-]{1,24}",v): raise ValueError("Invalid source unit")
+        return v
+    @model_validator(mode="after")
+    def verify_kg_conversion(self):
+        if self.unit=="KG":
+            if self.qty_kg_verified is None: self.qty_kg_verified=self.qty
+            elif abs(self.qty_kg_verified-self.qty)>1e-6:
+                raise ValueError("KG source quantity must equal verified KG quantity")
+        elif self.qty_kg_verified is not None and not self.kg_conversion_evidence_ref:
+            raise ValueError("Non-KG conversion requires an evidence reference")
+        if self.return_qty_kg>0 and self.qty_kg_verified is None:
+            raise ValueError("Return quantity requires verified KG conversion")
+        if self.qty_kg_verified is not None and self.return_qty_kg>self.qty_kg_verified:
+            raise ValueError("Return KG cannot exceed verified gross KG")
+        return self
 
 class OrderFact(BaseModel):
     order_ref: str=Field(min_length=5,max_length=80)
     order_date: date
-    status: Literal["CONFIRMED","FULFILLED","CANCELLED","RETURNED"]
+    status: Literal["CONFIRMED","FULFILLED","CANCELLED","RETURNED","PARTIAL"]
     lines: list[Item]=Field(min_length=1,max_length=100)
     @field_validator("order_ref")
     @classmethod
@@ -53,6 +76,8 @@ class OrderFact(BaseModel):
 class ImportFacts(BaseModel):
     confirmation: Literal["IMPORT COMPANY ATTESTED SALES FACTS"]
     source_document_ref: str=Field(min_length=8,max_length=100)
+    finance_reconciliation_ref: str=Field(min_length=8,max_length=120)
+    finance_verifier_id: str=Field(min_length=3,max_length=80)
     source_authorized: Literal[True]
     orders: list[OrderFact]=Field(min_length=1,max_length=200)
     @field_validator("source_document_ref")
@@ -74,21 +99,41 @@ def install_sales_schema(db):
     CREATE TABLE IF NOT EXISTS ai_sales_orders(
        order_ref TEXT PRIMARY KEY, order_date TEXT NOT NULL, status TEXT NOT NULL,
        source_classification TEXT NOT NULL, source_document_ref TEXT NOT NULL,
+       finance_reconciliation_ref TEXT NOT NULL DEFAULT '',
+       finance_verifier_id TEXT NOT NULL DEFAULT '',
        created_by INTEGER NOT NULL, created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ai_sales_lines(
        order_ref TEXT NOT NULL, sku TEXT NOT NULL, qty REAL NOT NULL, unit TEXT NOT NULL,
+       qty_kg REAL, return_qty_kg REAL NOT NULL DEFAULT 0,
+       line_status TEXT NOT NULL DEFAULT 'CONFIRMED',
+       kg_conversion_evidence_ref TEXT,
        PRIMARY KEY(order_ref,sku),
        FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref)
     );
     """)
+    # Idempotent schema evolution for databases created by earlier pilot releases.
+    if hasattr(db,"_raw"):
+        order_cols={r["column_name"] for r in db.execute(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='ai_sales_orders'").fetchall()}
+        line_cols={r["column_name"] for r in db.execute(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='ai_sales_lines'").fetchall()}
+    else:
+        order_cols={r["name"] for r in db.execute("PRAGMA table_info(ai_sales_orders)").fetchall()}
+        line_cols={r["name"] for r in db.execute("PRAGMA table_info(ai_sales_lines)").fetchall()}
+    for col,ddl in (("finance_reconciliation_ref","TEXT NOT NULL DEFAULT ''"),("finance_verifier_id","TEXT NOT NULL DEFAULT ''")):
+        if col not in order_cols: db.execute("ALTER TABLE ai_sales_orders ADD COLUMN "+col+" "+ddl)
+    for col,ddl in (("qty_kg","REAL"),("return_qty_kg","REAL NOT NULL DEFAULT 0"),
+                    ("line_status","TEXT NOT NULL DEFAULT 'CONFIRMED'"),("kg_conversion_evidence_ref","TEXT")):
+        if col not in line_cols: db.execute("ALTER TABLE ai_sales_lines ADD COLUMN "+col+" "+ddl)
 
 def _rows(db):
     return [dict(r) for r in db.execute(
         """SELECT o.order_ref,o.order_date,o.status,o.source_classification,
-                  l.sku,l.qty
+                  l.sku,l.qty,l.unit,l.qty_kg,l.return_qty_kg,l.line_status
            FROM ai_sales_orders o JOIN ai_sales_lines l ON l.order_ref=o.order_ref
-           WHERE o.source_classification=? AND o.status IN ('CONFIRMED','FULFILLED')
+           WHERE o.source_classification=? AND o.status IN ('CONFIRMED','FULFILLED','PARTIAL')
+             AND l.line_status NOT IN ('CANCELLED','RETURNED')
            ORDER BY o.order_date,o.order_ref,l.sku""",(SOURCE,)).fetchall()]
 
 def _eligible(db):
@@ -96,10 +141,14 @@ def _eligible(db):
     by_order=defaultdict(set)
     weekly=defaultdict(lambda:defaultdict(float))
     for r in rows:
-        by_order[r["order_ref"]].add(r["sku"])
-        d=date.fromisoformat(r["order_date"])
-        monday=d-timedelta(days=d.weekday())
-        weekly[r["sku"]][monday]+=float(r["qty"])
+        if float(r["qty"])>0: by_order[r["order_ref"]].add(r["sku"])
+        # Forecast only from explicit verified KG values. Original non-KG units
+        # remain eligible for basket mining but never get silently converted.
+        if r["qty_kg"] is not None:
+            d=date.fromisoformat(r["order_date"])
+            monday=d-timedelta(days=d.weekday())
+            net=max(0.0,float(r["qty_kg"])-float(r["return_qty_kg"] or 0))
+            weekly[r["sku"]][monday]+=net
     return rows,by_order,weekly
 
 def bundling_actual(db):
@@ -257,13 +306,18 @@ def mount_sales_intelligence(app,current,get_db,audit):
         with db:
             for o in data.orders:
                 db.execute("""INSERT INTO ai_sales_orders
-                     (order_ref,order_date,status,source_classification,source_document_ref,created_by,created_at)
-                     VALUES(?,?,?,?,?,?,?)""",
+                     (order_ref,order_date,status,source_classification,source_document_ref,
+                      finance_reconciliation_ref,finance_verifier_id,created_by,created_at)
+                     VALUES(?,?,?,?,?,?,?,?,?)""",
                      (o.order_ref,o.order_date.isoformat(),o.status,SOURCE,
-                      data.source_document_ref,u["id"],stamp))
+                      data.source_document_ref,data.finance_reconciliation_ref,
+                      data.finance_verifier_id,u["id"],stamp))
                 for item in o.lines:
-                    db.execute("INSERT INTO ai_sales_lines(order_ref,sku,qty,unit) VALUES(?,?,?,?)",
-                               (o.order_ref,item.sku,item.qty,item.unit))
+                    db.execute("""INSERT INTO ai_sales_lines
+                      (order_ref,sku,qty,unit,qty_kg,return_qty_kg,line_status,kg_conversion_evidence_ref)
+                      VALUES(?,?,?,?,?,?,?,?)""",
+                      (o.order_ref,item.sku,item.qty,item.unit,item.qty_kg_verified,
+                       item.return_qty_kg,item.line_status,item.kg_conversion_evidence_ref))
             audit(db,u,"IMPORT_AI_SALES_FACTS","ai_sales_batch",0,
                   after={"orders":len(data.orders),"lines":sum(len(o.lines) for o in data.orders),
                          "source_document_ref":data.source_document_ref,
