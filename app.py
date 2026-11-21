@@ -43,10 +43,16 @@ def connect():
 def boot():
     with connect() as db:
         install_schema(db)
+        from sales_intelligence import install_sales_schema
+        install_sales_schema(db)
         from sample_flow import install_sample_schema
         install_sample_schema(db)
         from catalog_stock_reference import install_stock_reference_schema
         install_stock_reference_schema(db)
+        from wms_operational import install_operational_wms_schema
+        install_operational_wms_schema(db)
+        from agent_architecture import install_agent_schema
+        install_agent_schema(db)
         if not db.execute("SELECT id FROM users WHERE email=?",(ADMIN_EMAIL,)).fetchone():
             db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(ADMIN_EMAIL,"ERP Administrator","admin",ph.hash(ADMIN_PASSWORD)))
         # An archived reset is a durable marker: do not re-seed demo products on restart.
@@ -442,6 +448,8 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
+from research.neural_retrieval import mount_neural_retrieval
+mount_neural_retrieval(app,current,get_db)
 from agent_pilot import mount_agent
 mount_agent(app,current,get_db)
 from wms_demo import mount_wms_demo
@@ -462,6 +470,10 @@ from sample_flow import mount_sample_flow
 mount_sample_flow(app,current,get_db,audit)
 from catalog_stock_reference import mount_stock_reference
 mount_stock_reference(app,current,get_db)
+from wms_operational import mount_operational_wms
+mount_operational_wms(app,current,get_db,audit)
+from agent_architecture import mount_company_agent
+mount_company_agent(app,current,get_db)
 @app.get("/branding/logo",include_in_schema=False)
 def official_brand_logo():
     """Serve permanent corporate branding asset included in this deployment."""

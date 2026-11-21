@@ -93,6 +93,8 @@ def train_one(points):
        "last_observed_week":points[-1][0].isoformat(),
        "holdout":{"model_mae_kg":round(mae,4),"four_week_mean_mae_kg":round(naive,4),
                   "model_outperformed_baseline":mae<naive},
+       "rolling_origin":__import__("research.forecast_validation",fromlist=["rolling_origin_evaluate"]).rolling_origin_evaluate(
+           [(row[0],row[1]) for row in points],min_train=12,horizon=4),
        "not_for_automatic_reordering":True}
 
 def run(weekly_csv,authorization,finance_document,output):

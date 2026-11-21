@@ -40,7 +40,8 @@ class SalesFactAITests(unittest.TestCase):
                     # A company-attested import requires an explicit documentary source.
                     invalid=c.post("/v1/admin/ai-sales-facts/import",headers=headers,json={
                         "confirmation":"IMPORT COMPANY ATTESTED SALES FACTS",
-                        "source_document_ref":"DOC-2026-001","source_authorized":True,
+                        "source_document_ref":"DOC-2026-001","finance_reconciliation_ref":"FIN-RECON-2026-001",
+                        "finance_verifier_id":"FIN-USER-01","source_authorized":True,
                         "orders":[{"order_ref":"SRC-TEST-1","order_date":"2026-01-05",
                              "status":"FULFILLED","lines":[{"sku":"NOT-IN-CATALOG","qty":3,"unit":"KG"}]}]})
                     self.assertEqual(invalid.status_code,422)
@@ -48,7 +49,7 @@ class SalesFactAITests(unittest.TestCase):
                         self.assertEqual(db.execute("SELECT COUNT(*) AS n FROM ai_sales_orders").fetchone()["n"],0)
                     d=date(2026,1,5)
                     orders=[]
-                    for i in range(10):
+                    for i in range(24):
                         orders.append({"order_ref":f"DOCTEST-{i:03d}",
                             "order_date":(d+timedelta(weeks=i)).isoformat(),
                             "status":"FULFILLED",
@@ -56,18 +57,37 @@ class SalesFactAITests(unittest.TestCase):
                                      {"sku":"FLV-VANI-02","qty":20+i,"unit":"KG"}]})
                     body={"confirmation":"IMPORT COMPANY ATTESTED SALES FACTS",
                           "source_document_ref":"FIN-REGISTER-2026-001",
+                          "finance_reconciliation_ref":"FIN-RECON-2026-001",
+                          "finance_verifier_id":"FIN-USER-01",
                           "source_authorized":True,"orders":orders}
                     added=c.post("/v1/admin/ai-sales-facts/import",headers=headers,json=body)
                     self.assertEqual(added.status_code,200,added.text)
-                    self.assertEqual(added.json()["orders"],10)
+                    self.assertEqual(added.json()["orders"],24)
                     duplicate=c.post("/v1/admin/ai-sales-facts/import",headers=headers,json=body)
                     self.assertEqual(duplicate.status_code,409)
+                    weekly_records=[]
+                    for i in range(24):
+                        week_start=d+timedelta(weeks=i)
+                        week_end=week_start+timedelta(days=6)
+                        for sku,base in (("FLV-STRAW-01",40),("FLV-VANI-02",20)):
+                            qty=base+i
+                            weekly_records.append({"sku":sku,"week_start":week_start.isoformat(),
+                              "week_end":week_end.isoformat(),"gross_sales_kg":qty,"return_kg":0,
+                              "net_demand_kg":qty,"missing_data_flag":"NONE",
+                              "source_document_ref":"FIN-WEEKLY-REGISTER-2026-001",
+                              "unit_definition_version":"KG-v1"})
+                    weekly_body={"confirmation":"IMPORT FINANCE VERIFIED WEEKLY DEMAND",
+                      "finance_reconciliation_ref":"FIN-WEEKLY-RECON-2026-001",
+                      "finance_verifier_id":"FIN-USER-01","source_authorized":True,
+                      "records":weekly_records}
+                    weekly_added=c.post("/v1/admin/ai-demand-weekly/import",headers=headers,json=weekly_body)
+                    self.assertEqual(weekly_added.status_code,200,weekly_added.text)
                     summary=c.get("/v1/ai/sales-readiness",headers=headers).json()
-                    self.assertEqual(summary["stored_order_count"],10)
+                    self.assertEqual(summary["stored_order_count"],24)
                     self.assertTrue(summary["bundling_ready"])
                     self.assertGreaterEqual(summary["forecast_ready_sku_count"],2)
                     rules=c.get("/v1/ai/bundling-company",headers=headers).json()
-                    self.assertEqual(rules["basket_count"],10)
+                    self.assertEqual(rules["basket_count"],24)
                     self.assertEqual(rules["status"],"COMPANY_FACTS_ATTESTED_NOT_SCIENTIFICALLY_VALIDATED")
                     self.assertEqual(rules["rules"][0]["confidence"],1)
                     pred=c.get("/v1/ai/forecast-company?sku=FLV-STRAW-01&horizon=4",headers=headers)
