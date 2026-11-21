@@ -291,11 +291,12 @@ def forecasting_actual(db,sku:str,horizon:int):
 
 def readiness(db):
     rows,orders,weekly=_eligible(db)
-    sku_counts={sku:len(week_map) for sku,week_map in weekly.items()}
-    forecast_ready=[sku for sku in sku_counts if forecasting_actual(db,sku,1)["status"]!="NOT_READY"]
+    weekly_skus=[r["sku"] for r in db.execute(
+        "SELECT DISTINCT sku FROM ai_sales_weekly_demand WHERE source_classification=?",(SOURCE,)).fetchall()]
+    forecast_ready=[sku for sku in weekly_skus if forecasting_actual(db,sku,1)["status"]!="NOT_READY"]
     all_orders=db.execute("SELECT COUNT(*) AS n FROM ai_sales_orders").fetchone()["n"]
     return {"stored_order_count":all_orders,"eligible_order_count":len(orders),
-            "eligible_line_count":len(rows),"sku_count":len(weekly),
+            "eligible_line_count":len(rows),"sku_count":len(weekly_skus),
             "bundling_ready":len(orders)>=MIN_BASKETS,
             "forecast_ready_sku_count":len(forecast_ready),
             "forecast_ready_skus":sorted(forecast_ready)[:50],
