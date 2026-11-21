@@ -278,7 +278,8 @@ def mount_operational_wms(app,current,get_db,audit):
         tw=data.to_warehouse.strip().upper() if data.to_warehouse else None
         fb=data.from_bin.strip().upper() if data.from_bin else None
         tb=data.to_bin.strip().upper() if data.to_bin else None
-        if data.movement_type in ("PICK","DISPATCH") and (not fw or tw): raise HTTPException(422,"PICK/DISPATCH require only a source location")
+        if data.movement_type=="PICK" and (not fw or not tw or (fw==tw and fb==tb)): raise HTTPException(422,"PICK requires distinct source and pick/staging locations")
+        if data.movement_type=="DISPATCH" and (not fw or tw): raise HTTPException(422,"DISPATCH requires only a source location")
         if data.movement_type in ("RECEIPT","RETURN") and (not tw or fw): raise HTTPException(422,"RECEIPT/RETURN require only a destination location")
         if data.movement_type=="TRANSFER" and (not fw or not tw or (fw==tw and fb==tb)): raise HTTPException(422,"TRANSFER requires distinct source and destination")
         if data.movement_type=="ADJUSTMENT":
@@ -324,7 +325,13 @@ def mount_operational_wms(app,current,get_db,audit):
                 reservation=db.execute("SELECT qty FROM wms_operational_reservations WHERE reservation_id=? AND status='ACTIVE'",
                                         (data.reservation_id,)).fetchone()
                 remaining=float(reservation["qty"])-data.quantity
-                if remaining<=1e-9:
+                if data.movement_type=="PICK":
+                    if remaining>1e-9:
+                        raise HTTPException(409,"A reserved pick must move the complete reservation; split reservations before picking")
+                    db.execute("""UPDATE wms_operational_reservations
+                      SET warehouse_id=?,bin_id=?,status='ACTIVE' WHERE reservation_id=?""",
+                      (tw,tb,data.reservation_id))
+                elif remaining<=1e-9:
                     db.execute("UPDATE wms_operational_reservations SET status='CONSUMED' WHERE reservation_id=?",
                                (data.reservation_id,))
                 else:
