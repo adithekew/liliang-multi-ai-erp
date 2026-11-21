@@ -114,7 +114,7 @@ def retrieve(query, products, top_k=20):
         score=sum(float(a)*float(b) for a,b in zip(qv,vec))
         dense.append((score,sku))
     dense.sort(key=lambda x:(-x[0],x[1]))
-    dense_scores=dict(dense)
+    dense_scores={sku:score for score,sku in dense}
     dense_rank={sku:i for i,(_,sku) in enumerate(dense,1)}
     from research.catalog_matcher import score_products
     lexical=score_products(query,eligible)
@@ -124,8 +124,7 @@ def retrieve(query, products, top_k=20):
         rrf[sku]=1.0/(RRF_K+dense_rank[sku])
     for sku,rank in lexical_rank.items():
         rrf[sku]=rrf.get(sku,0.0)+1.0/(RRF_K+rank)
-    ranked=sorted(rrf,key=lambda sku:(-rrf[sku],-next(x[0] for x in dense if x[1]==sku),sku))
-    dense_scores=dict(dense)
+    ranked=sorted(rrf,key=lambda sku:(-rrf[sku],-dense_scores[sku],sku))
     elapsed=round((perf_counter()-start)*1000,3)
     return {
       "method":"MULTILINGUAL_MINILM_DENSE_PLUS_BM25_RRF",
