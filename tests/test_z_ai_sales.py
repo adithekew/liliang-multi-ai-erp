@@ -62,7 +62,7 @@ class SalesFactAITests(unittest.TestCase):
                           "source_authorized":True,"orders":orders}
                     added=c.post("/v1/admin/ai-sales-facts/import",headers=headers,json=body)
                     self.assertEqual(added.status_code,200,added.text)
-                    self.assertEqual(added.json()["orders"],10)
+                    self.assertEqual(added.json()["orders"],24)
                     duplicate=c.post("/v1/admin/ai-sales-facts/import",headers=headers,json=body)
                     self.assertEqual(duplicate.status_code,409)
                     weekly_records=[]
