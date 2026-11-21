@@ -137,6 +137,14 @@ def _check_product(db,sku,unit,uom_evidence_ref):
         raise HTTPException(422,"UoM evidence reference is required")
     return True
 
+def _lock_sku(db,sku):
+    # Serialize concurrent balance checks for a SKU. PostgreSQL locks the product
+    # master row; SQLite uses BEGIN IMMEDIATE for a write transaction.
+    if hasattr(db,"_raw"):
+        db.execute("SELECT id FROM products WHERE sku=? FOR UPDATE",(sku,)).fetchone()
+    elif not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")
+
 def _location(db,warehouse,bin_id):
     w=db.execute("SELECT status FROM wms_operational_warehouses WHERE warehouse_id=?",(warehouse,)).fetchone()
     if not w or w["status"]!="ACTIVE": raise HTTPException(422,"Warehouse is missing or inactive")
@@ -265,9 +273,6 @@ def mount_operational_wms(app,current,get_db,audit):
         if u["role"] not in ROLES_WRITE: raise HTTPException(403,"Admin or Gudang required")
         if not enabled(): raise HTTPException(503,"Operational WMS feature flag is disabled")
         sku=_safe_id(data.sku,"SKU");_check_product(db,sku,data.unit,data.uom_evidence_ref)
-        if db.execute("SELECT 1 FROM wms_operational_movements WHERE idempotency_key=? OR movement_id=?",
-                      (data.idempotency_key,data.movement_id)).fetchone():
-            raise HTTPException(409,"Duplicate movement ID or idempotency key")
         fw=data.from_warehouse.strip().upper() if data.from_warehouse else None
         tw=data.to_warehouse.strip().upper() if data.to_warehouse else None
         fb=data.from_bin.strip().upper() if data.from_bin else None
@@ -282,13 +287,17 @@ def mount_operational_wms(app,current,get_db,audit):
             if data.adjustment_direction not in ("IN","OUT"): raise HTTPException(422,"Adjustment direction required")
         for loc in ((fw,fb),(tw,tb)):
             if loc[0]: _location(db,loc[0],loc[1])
-        if data.movement_type in ("PICK","DISPATCH","TRANSFER") or (data.movement_type=="ADJUSTMENT" and data.adjustment_direction=="OUT"):
-            available=_balance(db,sku,fw,fb,data.lot_batch,data.unit)
-            reserved=_reserved(db,sku,fw,fb,data.lot_batch,data.unit)
-            if data.quantity>available-reserved+1e-9:
-                raise HTTPException(409,"Insufficient available stock after active reservations")
         stamp=_now()
         with db:
+            _lock_sku(db,sku)
+            if db.execute("SELECT 1 FROM wms_operational_movements WHERE idempotency_key=? OR movement_id=?",
+                          (data.idempotency_key,data.movement_id)).fetchone():
+                raise HTTPException(409,"Duplicate movement ID or idempotency key")
+            if data.movement_type in ("PICK","DISPATCH","TRANSFER") or (data.movement_type=="ADJUSTMENT" and data.adjustment_direction=="OUT"):
+                available=_balance(db,sku,fw,fb,data.lot_batch,data.unit)
+                reserved=_reserved(db,sku,fw,fb,data.lot_batch,data.unit)
+                if data.quantity>available-reserved+1e-9:
+                    raise HTTPException(409,"Insufficient available stock after active reservations")
             db.execute("""INSERT INTO wms_operational_movements
               (movement_id,idempotency_key,movement_type,adjustment_direction,sku,lot_batch,expiry_date,qty,unit,
                from_warehouse,from_bin,to_warehouse,to_bin,reference_document,actor_id,created_at,note,status)
@@ -310,13 +319,14 @@ def mount_operational_wms(app,current,get_db,audit):
         if not enabled(): raise HTTPException(503,"Operational WMS feature flag is disabled")
         sku=_safe_id(data.sku,"SKU");wid=_safe_id(data.warehouse_id,"warehouse_id")
         _check_product(db,sku,data.unit,data.uom_evidence_ref);_location(db,wid,data.bin_id)
-        if db.execute("SELECT 1 FROM wms_operational_reservations WHERE idempotency_key=? OR reservation_id=?",
-                      (data.idempotency_key,data.reservation_id)).fetchone():
-            raise HTTPException(409,"Duplicate reservation ID or idempotency key")
-        on_hand=_balance(db,sku,wid,data.bin_id,data.lot_batch,data.unit)
-        reserved=_reserved(db,sku,wid,data.bin_id,data.lot_batch,data.unit)
-        if data.quantity>on_hand-reserved+1e-9: raise HTTPException(409,"Insufficient available stock to reserve")
         with db:
+            _lock_sku(db,sku)
+            if db.execute("SELECT 1 FROM wms_operational_reservations WHERE idempotency_key=? OR reservation_id=?",
+                          (data.idempotency_key,data.reservation_id)).fetchone():
+                raise HTTPException(409,"Duplicate reservation ID or idempotency key")
+            on_hand=_balance(db,sku,wid,data.bin_id,data.lot_batch,data.unit)
+            reserved=_reserved(db,sku,wid,data.bin_id,data.lot_batch,data.unit)
+            if data.quantity>on_hand-reserved+1e-9: raise HTTPException(409,"Insufficient available stock to reserve")
             db.execute("""INSERT INTO wms_operational_reservations
               (reservation_id,idempotency_key,sku,lot_batch,warehouse_id,bin_id,qty,unit,reference_document,actor_id,created_at,status)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
