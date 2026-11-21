@@ -114,6 +114,7 @@ def retrieve(query, products, top_k=20):
         score=sum(float(a)*float(b) for a,b in zip(qv,vec))
         dense.append((score,sku))
     dense.sort(key=lambda x:(-x[0],x[1]))
+    dense_scores=dict(dense)
     dense_rank={sku:i for i,(_,sku) in enumerate(dense,1)}
     from research.catalog_matcher import score_products
     lexical=score_products(query,eligible)
