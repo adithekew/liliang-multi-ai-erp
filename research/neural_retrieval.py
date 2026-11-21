@@ -14,6 +14,7 @@ import os
 import threading
 from pathlib import Path
 from time import perf_counter
+from pydantic import BaseModel, Field
 
 MODEL_ENV = "LILIANG_NEURAL_MODEL_PATH"
 INDEX_ENV = "LILIANG_NEURAL_INDEX_PATH"
@@ -127,12 +128,16 @@ def retrieve(query: str, products: list[dict], top_k: int = 20) -> dict:
     }
 
 
-def mount_neural_retrieval(app, current, get_db):
-    from fastapi import Depends, HTTPException, Query
+class NeuralMatchRequest(BaseModel):
+    query: str = Field(min_length=5, max_length=3000)
+    top_k: int = Field(default=20, ge=1, le=100)
 
-    @app.get("/v1/ai/neural-match")
-    def neural_match(q: str = Query(min_length=5, max_length=3000),
-                     top_k: int = Query(default=20, ge=1, le=100),
+
+def mount_neural_retrieval(app, current, get_db):
+    from fastapi import Depends, HTTPException
+
+    @app.post("/v1/ai/neural-match")
+    def neural_match(data: NeuralMatchRequest,
                      u=Depends(current), db=Depends(get_db)):
         if u["role"] not in ("admin", "sales", "technical", "manager"):
             raise HTTPException(403, "Role access denied")
@@ -140,6 +145,6 @@ def mount_neural_retrieval(app, current, get_db):
             "SELECT id,sku,name,description,profile,application,source_ref FROM products ORDER BY sku"
         ).fetchall()]
         try:
-            return retrieve(q, rows, top_k)
+            return retrieve(data.query, rows, data.top_k)
         except (RuntimeError, ValueError, OSError) as exc:
             raise HTTPException(503, str(exc)) from None
