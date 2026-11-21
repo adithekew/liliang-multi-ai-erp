@@ -108,6 +108,57 @@ class ImportFacts(BaseModel):
             raise ValueError("Duplicate order_ref in import batch")
         return v
 
+class WeeklyDemandItem(BaseModel):
+    sku:str=Field(min_length=3,max_length=80)
+    week_start:date
+    week_end:date
+    gross_sales_kg:float=Field(ge=0,le=100000000)
+    return_kg:float=Field(default=0,ge=0,le=100000000)
+    net_demand_kg:float=Field(ge=0,le=100000000)
+    missing_data_flag:Literal["NONE","PARTIAL_WEEK","DATA_MISSING","STOCKOUT","SKU_INACTIVE","OTHER"]
+    source_document_ref:str=Field(min_length=8,max_length=120)
+    unit_definition_version:str=Field(min_length=2,max_length=80)
+    @field_validator("sku")
+    @classmethod
+    def valid_sku(cls,v):
+        v=v.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9][A-Z0-9._/-]{2,79}",v): raise ValueError("Invalid SKU")
+        return v
+    @model_validator(mode="after")
+    def complete_week_and_net(self):
+        if self.week_start.weekday()!=0 or self.week_end!=self.week_start+timedelta(days=6):
+            raise ValueError("Demand records must use Monday-to-Sunday calendar weeks")
+        if self.return_kg>self.gross_sales_kg:
+            raise ValueError("Return KG cannot exceed gross sales KG")
+        if abs(self.net_demand_kg-(self.gross_sales_kg-self.return_kg))>1e-6:
+            raise ValueError("Net demand must equal gross sales KG minus return KG")
+        return self
+
+class ImportWeeklyDemand(BaseModel):
+    confirmation:Literal["IMPORT FINANCE VERIFIED WEEKLY DEMAND"]
+    finance_reconciliation_ref:str=Field(min_length=8,max_length=120)
+    finance_verifier_id:str=Field(min_length=3,max_length=80)
+    source_authorized:Literal[True]
+    records:list[WeeklyDemandItem]=Field(min_length=1,max_length=10000)
+    @field_validator("finance_reconciliation_ref")
+    @classmethod
+    def finance_ref(cls,v):
+        v=v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/#-]{7,119}",v): raise ValueError("Finance reconciliation reference required")
+        return v
+    @field_validator("finance_verifier_id")
+    @classmethod
+    def finance_actor(cls,v):
+        v=v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{3,80}",v): raise ValueError("Use pseudonymous Finance verifier ID")
+        return v
+    @field_validator("records")
+    @classmethod
+    def unique_sku_weeks(cls,v):
+        keys=[(x.sku,x.week_start) for x in v]
+        if len(keys)!=len(set(keys)): raise ValueError("Duplicate SKU/week in batch")
+        return v
+
 def install_sales_schema(db):
     db.executescript("""
     CREATE TABLE IF NOT EXISTS ai_sales_orders(
@@ -124,6 +175,15 @@ def install_sales_schema(db):
        kg_conversion_evidence_ref TEXT,
        PRIMARY KEY(order_ref,sku),
        FOREIGN KEY(order_ref) REFERENCES ai_sales_orders(order_ref)
+    );
+    CREATE TABLE IF NOT EXISTS ai_sales_weekly_demand(
+       sku TEXT NOT NULL, week_start TEXT NOT NULL, week_end TEXT NOT NULL,
+       gross_sales_kg REAL NOT NULL, return_kg REAL NOT NULL, net_demand_kg REAL NOT NULL,
+       missing_data_flag TEXT NOT NULL, source_document_ref TEXT NOT NULL,
+       finance_reconciliation_ref TEXT NOT NULL, finance_verifier_id TEXT NOT NULL,
+       unit_definition_version TEXT NOT NULL, source_classification TEXT NOT NULL,
+       created_by INTEGER NOT NULL, created_at TEXT NOT NULL,
+       PRIMARY KEY(sku,week_start)
     );
     """)
     # Idempotent schema evolution for databases created by earlier pilot releases.
@@ -189,13 +249,15 @@ def bundling_actual(db):
          "auto_sell":False,"source":"Private admin-attested sales order facts. Evidence and cancellations require Finance review."}
 
 def forecasting_actual(db,sku:str,horizon:int):
-    rows,baskets,weekly=_eligible(db)
-    points=weekly.get(sku,{})
+    weekly_rows=db.execute("""SELECT week_start,net_demand_kg FROM ai_sales_weekly_demand
+       WHERE sku=? AND source_classification=? AND missing_data_flag='NONE'
+       ORDER BY week_start""",(sku,SOURCE)).fetchall()
+    points={date.fromisoformat(r["week_start"]):float(r["net_demand_kg"]) for r in weekly_rows}
     if not points:
         return {"status":"NOT_READY","sku":sku,"weekly_points":0,
                 "required_contiguous_weeks":MIN_CONTIGUOUS_WEEKS,
                 "data_classification":SOURCE,
-                "reason":"No eligible historical order lines for this SKU"}
+                "reason":"No explicitly Finance-reconciled complete weekly KG demand series imported. Order-line gaps are not assumed to be zero."}
     end=max(points)
     expected=[end-timedelta(weeks=i) for i in reversed(range(MIN_CONTIGUOUS_WEEKS))]
     if any(d not in points for d in expected):
@@ -339,6 +401,44 @@ def mount_sales_intelligence(app,current,get_db,audit):
         return {"status":"IMPORTED_COMPANY_ATTESTED_NOT_VALIDATED",
                 "orders":len(data.orders),"lines":sum(len(o.lines) for o in data.orders),
                 "note":"Immutable order facts saved to private ERP database; no automatic retraining."}
+
+    @app.post("/v1/admin/ai-demand-weekly/import")
+    def import_weekly_demand(data:ImportWeeklyDemand,u=Depends(current),db=Depends(get_db)):
+        if u["role"]!="admin": raise HTTPException(403,"Admin required")
+        if str(u["email"]).lower().startswith("uat-"):
+            raise HTTPException(403,"UAT account cannot attest company demand facts")
+        today=date.today()
+        if any(r.week_end>=today for r in data.records):
+            raise HTTPException(422,"Only completed historical calendar weeks can be imported")
+        skus=sorted({r.sku for r in data.records})
+        found={r["sku"] for r in db.execute("SELECT sku FROM products WHERE sku IN ("+",".join("?" for _ in skus)+")",tuple(skus)).fetchall()}
+        if set(skus)-found: raise HTTPException(422,"Unknown catalog SKU in weekly demand import")
+        refs=[(r.sku,r.week_start.isoformat()) for r in data.records]
+        existing=[]
+        for sku,week in refs:
+            if db.execute("SELECT 1 FROM ai_sales_weekly_demand WHERE sku=? AND week_start=?",(sku,week)).fetchone():
+                existing.append((sku,week))
+        if existing: raise HTTPException(409,"SKU/week already exists; weekly demand import is append-only")
+        stamp=datetime.now(timezone.utc).isoformat()
+        with db:
+            for row in data.records:
+                db.execute("""INSERT INTO ai_sales_weekly_demand
+                  (sku,week_start,week_end,gross_sales_kg,return_kg,net_demand_kg,missing_data_flag,
+                   source_document_ref,finance_reconciliation_ref,finance_verifier_id,
+                   unit_definition_version,source_classification,created_by,created_at)
+                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                  (row.sku,row.week_start.isoformat(),row.week_end.isoformat(),row.gross_sales_kg,
+                   row.return_kg,row.net_demand_kg,row.missing_data_flag,row.source_document_ref,
+                   data.finance_reconciliation_ref,data.finance_verifier_id,row.unit_definition_version,
+                   SOURCE,u["id"],stamp))
+            audit(db,u,"IMPORT_AI_WEEKLY_DEMAND","ai_sales_weekly_batch",0,
+              after={"records":len(data.records),"skus":len(skus),
+                     "finance_reconciliation_ref":data.finance_reconciliation_ref,
+                     "finance_verifier_id":data.finance_verifier_id,
+                     "attestation_not_independent_verification":True})
+        return {"status":"IMPORTED_COMPANY_ATTESTED_NOT_INDEPENDENTLY_VERIFIED",
+          "weekly_records":len(data.records),"sku_count":len(skus),
+          "note":"Only records marked missing_data_flag=NONE enter forecasting. No zero-fill is performed."}
 
     @app.post("/v1/ai/bundling-proxy-preview")
     def proxy_preview(data:ProxyPreview,u=Depends(current)):
