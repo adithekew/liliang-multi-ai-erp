@@ -10,7 +10,7 @@ from research import neural_retrieval as nr
 
 class FakeModel:
     def encode(self, texts, **kwargs):
-        return [[1.0, 0.0, 0.0] for _ in texts]
+        return [[1.0] + [0.0] * 127 for _ in texts]
 
 
 def product(sku, name):
@@ -21,12 +21,12 @@ def product(sku, name):
 
 def fixture(products):
     rows = []
-    for p, vector in zip(products, ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])):
+    for p, vector in zip(products, ([1.0] + [0.0] * 127, [0.0, 1.0] + [0.0] * 126)):
         text = nr.product_text(p)
         rows.append({"sku": p["sku"], "name": p["name"], "text": text,
                      "text_sha256": nr.text_sha256(text), "embedding": vector})
     return {"schema_version": 1, "model_id": nr.EXPECTED_MODEL_ID,
-            "model_revision": "test-revision", "dimensions": 3,
+            "model_revision": "test-revision", "dimensions": 128,
             "catalog_version": "test-catalog", "products": rows}
 
 
