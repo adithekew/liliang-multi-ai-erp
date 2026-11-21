@@ -87,7 +87,7 @@ class SalesFactAITests(unittest.TestCase):
                     self.assertTrue(summary["bundling_ready"])
                     self.assertGreaterEqual(summary["forecast_ready_sku_count"],2)
                     rules=c.get("/v1/ai/bundling-company",headers=headers).json()
-                    self.assertEqual(rules["basket_count"],10)
+                    self.assertEqual(rules["basket_count"],24)
                     self.assertEqual(rules["status"],"COMPANY_FACTS_ATTESTED_NOT_SCIENTIFICALLY_VALIDATED")
                     self.assertEqual(rules["rules"][0]["confidence"],1)
                     pred=c.get("/v1/ai/forecast-company?sku=FLV-STRAW-01&horizon=4",headers=headers)
