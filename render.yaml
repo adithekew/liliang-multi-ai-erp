@@ -18,3 +18,9 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: WMS_OPERATIONAL_ENABLED
+        value: "false"
+      - key: LILIANG_NEURAL_MODEL_PATH
+        sync: false
+      - key: LILIANG_NEURAL_INDEX_PATH
+        sync: false
