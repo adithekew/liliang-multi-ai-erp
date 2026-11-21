@@ -109,6 +109,12 @@ class MovementIn(BaseModel):
     uom_verified:Literal[True]
     uom_evidence_ref:str=Field(min_length=8,max_length=120)
     note:str=Field(min_length=5,max_length=300)
+    @field_validator("unit")
+    @classmethod
+    def normalize_unit(cls,v):
+        v=v.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9._/-]{1,24}",v): raise ValueError("Invalid UoM")
+        return v
 
 class ReservationIn(BaseModel):
     reservation_id:str=Field(default_factory=lambda:"RSV-"+uuid.uuid4().hex[:20].upper())
@@ -122,6 +128,12 @@ class ReservationIn(BaseModel):
     reference_document:str=Field(min_length=8,max_length=120)
     uom_verified:Literal[True]
     uom_evidence_ref:str=Field(min_length=8,max_length=120)
+    @field_validator("unit")
+    @classmethod
+    def normalize_unit(cls,v):
+        v=v.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9._/-]{1,24}",v): raise ValueError("Invalid UoM")
+        return v
 
 def _check_product(db,sku,unit,uom_evidence_ref):
     p=db.execute("SELECT sku FROM products WHERE sku=?",(sku,)).fetchone()
