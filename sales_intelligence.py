@@ -87,6 +87,20 @@ class ImportFacts(BaseModel):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/#-]{7,99}",v):
             raise ValueError("A source document register ID is required, not a filename or customer name")
         return v
+    @field_validator("finance_reconciliation_ref")
+    @classmethod
+    def finance_ref(cls,v):
+        v=v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/#-]{7,119}",v):
+            raise ValueError("Finance reconciliation register reference is required")
+        return v
+    @field_validator("finance_verifier_id")
+    @classmethod
+    def finance_actor(cls,v):
+        v=v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{3,80}",v):
+            raise ValueError("Use a pseudonymous Finance verifier ID")
+        return v
     @field_validator("orders")
     @classmethod
     def refs_unique(cls,v):
