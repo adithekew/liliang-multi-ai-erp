@@ -69,6 +69,8 @@ def company_gates(db):
       "agent_tool_trace_count":agent_traces,
       "independent_review_proven":False,
       "all_models_trained_or_validated_on_company_data":False,
+      "all_models_trained_on_validated_company_data":False,
+      "all_stock_required_before_retrieval_training":False,
       "auto_retraining_enabled":False,
       "production_ready":False,
       "gates":gates,
