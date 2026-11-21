@@ -105,6 +105,7 @@ class MovementIn(BaseModel):
     to_warehouse:str|None=None
     to_bin:str|None=None
     reference_document:str=Field(min_length=8,max_length=120)
+    reservation_id:str|None=None
     uom_verified:Literal[True]
     uom_evidence_ref:str=Field(min_length=8,max_length=120)
     note:str=Field(min_length=5,max_length=300)
@@ -293,9 +294,23 @@ def mount_operational_wms(app,current,get_db,audit):
             if db.execute("SELECT 1 FROM wms_operational_movements WHERE idempotency_key=? OR movement_id=?",
                           (data.idempotency_key,data.movement_id)).fetchone():
                 raise HTTPException(409,"Duplicate movement ID or idempotency key")
+            if data.reservation_id and data.movement_type not in ("PICK","DISPATCH"):
+                raise HTTPException(422,"A reservation can only be consumed by PICK or DISPATCH")
             if data.movement_type in ("PICK","DISPATCH","TRANSFER") or (data.movement_type=="ADJUSTMENT" and data.adjustment_direction=="OUT"):
                 available=_balance(db,sku,fw,fb,data.lot_batch,data.unit)
                 reserved=_reserved(db,sku,fw,fb,data.lot_batch,data.unit)
+                if data.reservation_id:
+                    reservation=db.execute("SELECT * FROM wms_operational_reservations WHERE reservation_id=? AND status='ACTIVE'",
+                                            (data.reservation_id,)).fetchone()
+                    if not reservation: raise HTTPException(409,"Active reservation not found")
+                    if (reservation["sku"]!=sku or reservation["warehouse_id"]!=fw
+                        or (reservation["bin_id"] or "")!=(fb or "")
+                        or (reservation["lot_batch"] or "")!=(data.lot_batch or "")
+                        or reservation["unit"]!=data.unit.upper()):
+                        raise HTTPException(409,"Reservation does not match dispatch SKU/location/lot/unit")
+                    reserved=max(0.0,reserved-float(reservation["qty"]))
+                    if data.quantity>float(reservation["qty"])+1e-9:
+                        raise HTTPException(409,"Dispatch quantity exceeds reserved quantity")
                 if data.quantity>available-reserved+1e-9:
                     raise HTTPException(409,"Insufficient available stock after active reservations")
             db.execute("""INSERT INTO wms_operational_movements
@@ -305,9 +320,20 @@ def mount_operational_wms(app,current,get_db,audit):
               (data.movement_id,data.idempotency_key,data.movement_type,data.adjustment_direction,sku,data.lot_batch,
                data.expiry_date.isoformat() if data.expiry_date else None,data.quantity,data.unit.upper(),fw,fb,tw,tb,
                data.reference_document,u["id"],stamp,data.note,"POSTED"))
+            if data.reservation_id:
+                reservation=db.execute("SELECT qty FROM wms_operational_reservations WHERE reservation_id=? AND status='ACTIVE'",
+                                        (data.reservation_id,)).fetchone()
+                remaining=float(reservation["qty"])-data.quantity
+                if remaining<=1e-9:
+                    db.execute("UPDATE wms_operational_reservations SET status='CONSUMED' WHERE reservation_id=?",
+                               (data.reservation_id,))
+                else:
+                    db.execute("UPDATE wms_operational_reservations SET qty=? WHERE reservation_id=?",
+                               (remaining,data.reservation_id))
             audit(db,u,"WMS_"+data.movement_type,"wms_movement",data.movement_id,
               after={"sku":sku,"quantity":data.quantity,"unit":data.unit.upper(),"from":fw,"to":tw,
-                     "reference_document":data.reference_document,"idempotency_key":data.idempotency_key})
+                     "reference_document":data.reference_document,"idempotency_key":data.idempotency_key,
+                     "reservation_id":data.reservation_id})
         return {"movement_id":data.movement_id,"status":"POSTED","type":data.movement_type,
           "sku":sku,"quantity":data.quantity,"unit":data.unit.upper(),
           "source_balance_after":round(_balance(db,sku,fw,fb,data.lot_batch,data.unit),6) if fw else None,
