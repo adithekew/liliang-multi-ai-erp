@@ -43,6 +43,8 @@ def connect():
 def boot():
     with connect() as db:
         install_schema(db)
+        from sales_intelligence import install_sales_schema
+        install_sales_schema(db)
         from sample_flow import install_sample_schema
         install_sample_schema(db)
         from catalog_stock_reference import install_stock_reference_schema
