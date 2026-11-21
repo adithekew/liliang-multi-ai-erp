@@ -207,6 +207,7 @@ def _rows(db):
                   l.sku,l.qty,l.unit,l.qty_kg,l.return_qty_kg,l.line_status
            FROM ai_sales_orders o JOIN ai_sales_lines l ON l.order_ref=o.order_ref
            WHERE o.source_classification=? AND o.status IN ('CONFIRMED','FULFILLED','PARTIAL')
+             AND COALESCE(o.finance_reconciliation_ref,'')<>'' AND COALESCE(o.finance_verifier_id,'')<>''
              AND l.line_status NOT IN ('CANCELLED','RETURNED')
            ORDER BY o.order_date,o.order_ref,l.sku""",(SOURCE,)).fetchall()]
 
@@ -251,6 +252,7 @@ def bundling_actual(db):
 def forecasting_actual(db,sku:str,horizon:int):
     weekly_rows=db.execute("""SELECT week_start,net_demand_kg FROM ai_sales_weekly_demand
        WHERE sku=? AND source_classification=? AND missing_data_flag='NONE'
+         AND COALESCE(finance_reconciliation_ref,'')<>'' AND COALESCE(finance_verifier_id,'')<>''
        ORDER BY week_start""",(sku,SOURCE)).fetchall()
     points={date.fromisoformat(r["week_start"]):float(r["net_demand_kg"]) for r in weekly_rows}
     if not points:
