@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 
 SOURCE="COMPANY_ATTESTED"
 MIN_BASKETS=10
-MIN_CONTIGUOUS_WEEKS=8
+MIN_CONTIGUOUS_WEEKS=24
 
 class Item(BaseModel):
     sku: str=Field(min_length=3,max_length=80)
