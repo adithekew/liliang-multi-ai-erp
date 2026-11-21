@@ -14,7 +14,7 @@ class FakeModel:
 
 
 def product(sku, name):
-    row = {"sku": sku, "name": name, "description": "flavor powder",
+    row = {"id": 1 if sku == "SKU-001" else 2, "sku": sku, "name": name, "description": "flavor powder",
            "profile": "strawberry", "application": "beverage", "source_ref": "TEST"}
     return row
 
