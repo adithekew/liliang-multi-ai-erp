@@ -35,8 +35,10 @@ def _load_index(path):
     for row in rows:
         sku=str(row.get("sku") or "").strip().upper()
         vec=row.get("embedding")
-        if not sku or sku in seen or not isinstance(vec,list) or len(vec)!=dim:
+        if not sku or sku in seen or not isinstance(vec,list):
             raise ValueError("Invalid or duplicate SKU/vector in neural catalog index")
+        if len(vec)!=dim:
+            raise ValueError("Neural embedding dimensions mismatch")
         if row.get("text_sha256")!=text_sha256(str(row.get("text") or "")):
             raise ValueError("Neural index text fingerprint mismatch")
         if not all(isinstance(v,(int,float)) and math.isfinite(v) for v in vec):
