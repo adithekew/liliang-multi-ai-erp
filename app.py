@@ -47,6 +47,10 @@ def boot():
         install_sample_schema(db)
         from catalog_stock_reference import install_stock_reference_schema
         install_stock_reference_schema(db)
+        from wms_operational import install_operational_wms_schema
+        install_operational_wms_schema(db)
+        from agent_architecture import install_agent_schema
+        install_agent_schema(db)
         if not db.execute("SELECT id FROM users WHERE email=?",(ADMIN_EMAIL,)).fetchone():
             db.execute("INSERT INTO users(email,name,role,hash) VALUES(?,?,?,?)",(ADMIN_EMAIL,"ERP Administrator","admin",ph.hash(ADMIN_PASSWORD)))
         # An archived reset is a durable marker: do not re-seed demo products on restart.
@@ -464,6 +468,10 @@ from sample_flow import mount_sample_flow
 mount_sample_flow(app,current,get_db,audit)
 from catalog_stock_reference import mount_stock_reference
 mount_stock_reference(app,current,get_db)
+from wms_operational import mount_operational_wms
+mount_operational_wms(app,current,get_db,audit)
+from agent_architecture import mount_company_agent
+mount_company_agent(app,current,get_db)
 @app.get("/branding/logo",include_in_schema=False)
 def official_brand_logo():
     """Serve permanent corporate branding asset included in this deployment."""
