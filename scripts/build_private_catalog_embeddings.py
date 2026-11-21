@@ -36,7 +36,10 @@ def build(output, authorization_record):
         raise ValueError("Private catalog embeddings must be stored outside Git repositories")
     with connect() as db:
         rows = [dict(r) for r in db.execute(
-            "SELECT sku,name,description,profile,application,source_ref FROM products ORDER BY sku"
+            """SELECT p.sku,p.name,p.description,p.profile,p.application,p.source_ref,
+                      d.product_type,d.application_raw,d.composition_raw
+               FROM products p LEFT JOIN catalog_product_details d ON d.sku=p.sku
+               ORDER BY p.sku"""
         ).fetchall()]
     if not rows:
         raise ValueError("No catalog products available")
