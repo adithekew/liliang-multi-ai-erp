@@ -442,6 +442,8 @@ def summary(u=Depends(permit("admin","sales","manager","technical","gudang")),db
             "audit_event_count":db.execute("SELECT COUNT(*) AS n FROM transaction_events").fetchone()["n"]}
 from multi_ai import mount_ai, score_products
 mount_ai(app,current,get_db)
+from research.neural_retrieval import mount_neural_retrieval
+mount_neural_retrieval(app,current,get_db)
 from agent_pilot import mount_agent
 mount_agent(app,current,get_db)
 from wms_demo import mount_wms_demo
