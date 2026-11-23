@@ -46,15 +46,16 @@ def evaluate_retrieval(cases,k=5,catalog_sku_count=None):
             rows.append({"inquiry_id":case["inquiry_id"],**m,
                          "recall_eligible":bool(case.get("pool_complete"))})
         if not rows:continue
+        eligible_recalls = [row["recall_at_k"] for row in rows
+                           if row["recall_eligible"] and row["recall_at_k"] is not None]
         out[method]={
           "evaluated_cases":len(rows),
           "mean_ndcg_at_k":sum(x["ndcg_at_k"] for x in rows)/len(rows),
           "mrr_at_k":sum(x["mrr_at_k"] for x in rows)/len(rows),
           "ndcg_ci_95":_bootstrap_ci([x["ndcg_at_k"] for x in rows]),
           "mrr_ci_95":_bootstrap_ci([x["mrr_at_k"] for x in rows]),
-          "recall_at_k":(sum(x["recall_at_k"] for x in rows if x["recall_eligible"] and x["recall_at_k"] is not None)/
-             max(1,sum(1 for x in rows if x["recall_eligible"] and x["recall_at_k"] is not None))),
-          "recall_eligible_cases":sum(1 for x in rows if x["recall_eligible"] and x["recall_at_k"] is not None),
+          "recall_at_k":sum(eligible_recalls)/len(eligible_recalls) if eligible_recalls else None,
+          "recall_eligible_cases":len(eligible_recalls),
           "case_metrics":rows}
     return {"status":"HELD_OUT_EXPERIMENTAL_METRICS","k":k,"catalog_sku_count":catalog_sku_count,
       "methods":out,"paired_comparison_requires_identical_inquiry_ids":True,
@@ -83,6 +84,7 @@ def evaluate_bundling(train_baskets,test_baskets,k=3):
              "POPULARITY_BASELINE":lambda a:[x for x in popular if x!=a][:k]}
     out={}
     for name,recommend in methods.items():
+        hit_cases = 0
         hits=0;predicted=0;relevant=0;covered=0;case_count=0
         for basket in test_baskets:
             basket=set(basket)
@@ -92,20 +94,32 @@ def evaluate_bundling(train_baskets,test_baskets,k=3):
                 rec=recommend(antecedent)
                 if rec:covered+=1
                 predicted+=len(rec);relevant+=len(truth)
-                hits+=len(set(rec)&truth);case_count+=1
+                matched = len(set(rec) & truth)
+                hits += matched
+                hit_cases += int(matched > 0)
+                case_count += 1
         out[name]={"antecedent_cases":case_count,"coverage":covered/max(1,case_count),
           "precision_at_k":hits/max(1,predicted),"recall_at_k":hits/max(1,relevant),
-          "hit_rate_at_k":sum(1 for b in test_baskets for a in b if (set(recommend(a))&(set(b)-{a})))/max(1,sum(max(0,len(set(b))-1) for b in test_baskets))}
+          "hit_rate_at_k":hit_cases / case_count if case_count else None}
     return {"status":"TEMPORAL_HOLDOUT_ASSOCIATION_EVALUATION","train_baskets":len(train_baskets),
       "test_baskets":len(test_baskets),"k":k,"results":out,"causal_claim":False,
       "warning":"Association rules are descriptive co-purchase patterns, not causal effects or supervised neural training."}
 
+def _agent_flag(case, field):
+    value = case.get(field)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().upper() in {"TRUE", "FALSE"}:
+        return value.strip().upper() == "TRUE"
+    raise ValueError(f"Expected TRUE or FALSE for {field}")
+
+
 def evaluate_agent(cases):
     if not cases:raise ValueError("No agent evaluation cases supplied")
     n=len(cases)
-    correct=sum(bool(x.get("tool_call_correct")) for x in cases)
-    compliant=sum(bool(x.get("policy_compliant")) for x in cases)
-    unauthorized=sum(bool(x.get("unauthorized_action_attempted")) for x in cases)
+    correct=sum(_agent_flag(x, "tool_call_correct") for x in cases)
+    compliant=sum(_agent_flag(x, "policy_compliant") for x in cases)
+    unauthorized=sum(_agent_flag(x, "unauthorized_action_attempted") for x in cases)
     grounded=[float(x["groundedness_score_1_5"]) for x in cases if x.get("groundedness_score_1_5") is not None]
     return {"cases":n,"tool_call_accuracy":correct/n,"policy_compliance_rate":compliant/n,
       "unauthorized_action_attempt_count":unauthorized,

@@ -101,13 +101,20 @@ def validate(path):
     for i,r in enumerate(ai02,2):
         iid=str(r.get("inquiry_id") or "")
         sku=str(r.get("internal_sku") or "").upper()
-        try:grade=int(r.get("relevance_grade_0_3"))
-        except (TypeError,ValueError):grade=-1
+        raw_grade = r.get("relevance_grade_0_3")
+        decision = str(r.get("technical_decision") or "").strip().upper()
+        unjudged = raw_grade in (None, "") and decision == "UNKNOWN"
+        graded = type(raw_grade) in (int, float, str) and raw_grade in (0, 1, 2, 3, "0", "1", "2", "3")
+        reviewer = str(r.get("reviewer_id") or "").strip()
         if iid not in inquiry_by_id:errors.append({"sheet":"05_AI02_RELEVANCE_LABELS","row":i,"issue":"UNKNOWN_INQUIRY_ID"})
-        if grade not in (0,1,2,3):errors.append({"sheet":"05_AI02_RELEVANCE_LABELS","row":i,"issue":"INVALID_RELEVANCE_GRADE"})
+        if not graded and not unjudged:errors.append({"sheet":"05_AI02_RELEVANCE_LABELS","row":i,"issue":"INVALID_RELEVANCE_GRADE"})
+        if not reviewer:errors.append({"sheet":"05_AI02_RELEVANCE_LABELS","row":i,"issue":"MISSING_REVIEWER_ID"})
         if not str(r.get("review_rationale") or "").strip():errors.append({"sheet":"05_AI02_RELEVANCE_LABELS","row":i,"issue":"MISSING_REVIEW_RATIONALE"})
-        key=(iid,sku);pair_reviewers[key].add(str(r.get("reviewer_id") or ""));pair_status[key].add(str(r.get("adjudication_status") or "").upper())
-    adjudicated_pairs=sum(1 for k in pair_reviewers if len(pair_reviewers[k])>=2 and pair_status[k]&{"AGREED","ADJUDICATED"})
+        if graded and reviewer and decision != "UNKNOWN" and iid in inquiry_by_id and sku:
+            key = (iid, sku, r.get("label_set_version"), r.get("review_round"))
+            pair_reviewers[key].add(reviewer)
+            pair_status[key].add(str(r.get("adjudication_status") or "").upper())
+    adjudicated_pairs=len({k[:2] for k in pair_reviewers if len(pair_reviewers[k])>=2 and pair_status[k]&{"AGREED","ADJUDICATED"}})
     # Finance orders: attested/proxy/synthetic are not silently promoted to verified facts.
     order_by_ref={}
     finance_orders=set()
