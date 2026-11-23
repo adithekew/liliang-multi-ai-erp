@@ -47,6 +47,26 @@ def _date(value):
     if isinstance(value,date):return value
     return date.fromisoformat(str(value)[:10])
 
+def _supports_supplier(evidence, supplier, kind, as_of):
+    for field in ("supplier_id", "supplier_sku"):
+        identity = str(supplier.get(field) or "").strip()
+        if not identity or identity != str(evidence.get(field) or "").strip():
+            return False
+    if evidence.get("evidence_type") != kind or evidence.get("review_status") != "VERIFIED":
+        return False
+    if not all(str(evidence.get(field) or "").strip() for field in
+               ("private_storage_uri", "field_supported", "verbatim_value", "page_or_section")):
+        return False
+    try:
+        if evidence.get("issue_date") and _date(evidence["issue_date"]) > as_of:
+            return False
+        if evidence.get("expiry_date") and _date(evidence["expiry_date"]) < as_of:
+            return False
+    except ValueError:
+        return False
+    return True
+
+
 def validate(path):
     p=Path(path).expanduser().resolve()
     if not p.is_file():raise ValueError("Workbook not found")
@@ -75,14 +95,34 @@ def validate(path):
         supplier_keys.add(key)
         sku=str(r.get("internal_sku") or "").strip().upper()
         if sku:supplier_skus.add(sku)
-    evidence_ids={str(r.get("evidence_id") or "").strip() for r in evidence if r.get("evidence_id")}
-    verified_supplier=0
-    for i,r in enumerate(supplier,2):
-        if str(r.get("technical_verification_status") or "").upper()=="VERIFIED":
-            verified_supplier+=1
-            refs=[str(r.get(k) or "").strip() for k in ("tds_evidence_id","coa_evidence_id","sds_evidence_id")]
-            if not any(x and x in evidence_ids for x in refs):
-                errors.append({"sheet":"01_SUPPLIER_CATALOG","row":i,"issue":"VERIFIED_WITHOUT_LINKED_EVIDENCE"})
+    evidence_by_id = defaultdict(list)
+    for i, row in enumerate(evidence, 2):
+        evidence_id = str(row.get("evidence_id") or "").strip()
+        if not evidence_id or evidence_id in evidence_by_id:
+            errors.append({"sheet": "02_TECHNICAL_EVIDENCE", "row": i,
+                           "issue": "MISSING_OR_DUPLICATE_EVIDENCE_ID"})
+        evidence_by_id[evidence_id].append(row)
+    verified_supplier = 0
+    today = date.today()
+    for i, row in enumerate(supplier, 2):
+        if str(row.get("technical_verification_status") or "").strip().upper() != "VERIFIED":
+            continue
+        verified_supplier += 1
+        has_link = False
+        for kind in ("TDS", "COA", "SDS"):
+            column = kind.lower() + "_evidence_id"
+            reference = str(row.get(column) or "").strip()
+            if not reference:
+                continue
+            has_link = True
+            matches = evidence_by_id.get(reference, [])
+            valid = len(matches) == 1 and _supports_supplier(matches[0], row, kind, today)
+            if not valid:
+                errors.append({"sheet": "01_SUPPLIER_CATALOG", "row": i, "column": column,
+                               "issue": "INVALID_VERIFIED_EVIDENCE_LINK"})
+        if not has_link:
+            errors.append({"sheet": "01_SUPPLIER_CATALOG", "row": i,
+                           "issue": "VERIFIED_WITHOUT_LINKED_EVIDENCE"})
     inquiry_by_id={}
     split_by_group=defaultdict(set)
     for i,r in enumerate(inquiries,2):
