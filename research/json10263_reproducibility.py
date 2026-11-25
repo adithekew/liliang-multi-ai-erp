@@ -129,7 +129,7 @@ def main():
     a=p.parse_args()
     out=Path(a.output).resolve()
     result=audit(a.rankings,a.labels)
-    if not out.parent.exists() or any(x.name==".git" for part in [out.parent,*out.parent.parents] for x in [part]):
+    if not out.parent.exists() or any((part / ".git").exists() for part in [out.parent,*out.parent.parents]):
         raise ValueError("Output must go into preexisting authorized private directory, not Git")
     out.write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
     print(result["status"])
