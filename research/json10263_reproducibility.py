@@ -55,6 +55,8 @@ def read_gold(path,items):
         if not qid or not sku or grade not in ("0","1","2","3") or sku in gold[qid]:
             raise ValueError("Invalid or duplicate relevance judgment")
         gold[qid][sku]=int(grade)
+    if len(records)!=200 or set(gold)!=set(TEST):
+        raise ValueError("Exactly 200 held-out consensus grades over RQ041–RQ050 required")
     for qid in TEST:
         if len(gold[qid])!=20 or set(gold[qid])!=set(items[(qid,"BM25")]):
             raise ValueError("Missing fully judged held-out query "+qid)
