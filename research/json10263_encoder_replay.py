@@ -2,9 +2,22 @@
 No raw prepared texts, vectors, model weights, or proprietary records are
 embedded in this public repository, uploaded or written to GitHub Actions.
 """
-import argparse,csv,hashlib,json,os,re
+import argparse,csv,hashlib,json,os,re,tempfile
 from pathlib import Path
 from research.json10263_reproducibility import read_ranks
+from research.json10263_author_export_replay import convert_rankings
+
+
+def author_aware_rankings(path):
+    """Accept the uploaded original CSV schema without changing original evidence."""
+    with open(path,encoding="utf-8-sig",newline="") as f:
+        names=csv.DictReader(f).fieldnames or []
+    if "Inquiry_ID" not in names:
+        return read_ranks(path)
+    with tempfile.TemporaryDirectory() as temp:
+        converted=Path(temp)/"rankings_normalized.csv"
+        convert_rankings(path,converted)
+        return read_ranks(converted)
 
 def digest(path):
     h=hashlib.sha256()
@@ -36,7 +49,7 @@ def rerun(rankings,query_csv,sku_csv,checkpoint,full_commit,tolerance=1e-5):
         raise ValueError("Full 40-digit model revision is required")
     checkpoint=Path(checkpoint).resolve()
     if not checkpoint.is_dir():raise ValueError("Missing local model checkpoint")
-    labels,qcount=read_ranks(rankings)
+    labels,qcount=author_aware_rankings(rankings)
     q=prepared_texts(query_csv,"inquiry_id")
     products=prepared_texts(sku_csv,"sku_id")
     if len(q)!=50 or len(products)!=20:
@@ -74,13 +87,14 @@ def rerun(rankings,query_csv,sku_csv,checkpoint,full_commit,tolerance=1e-5):
             if err>tolerance:different_scores+=1
     return {"status":"PASS_LOCAL_DENSE_SCORE_REPLAY" if different_scores==0 and different_ranks==0 else "FAILED_LOCAL_DENSE_SCORE_REPLAY",
       "is_proof_of_original_checkpoint":False,
+      "original_model_revision_provenance_verified":False,
       "full_commit_sha_claimed":full_commit,
       "checkpoint_sha256":weights_sha(checkpoint),
       "input_sha256":{"rankings":digest(rankings),"queries":digest(query_csv),"products":digest(sku_csv)},
       "scores_checked":1000,"scores_outside_tolerance":different_scores,
       "rank_mismatches":different_ranks,"max_absolute_score_error":round(max_score_error,9),
       "cosine_tolerance":tolerance,
-      "caveats":["Authenticity of local checkpoint must be independently established against publisher commit.",
+      "caveats":["Authenticity of local checkpoint must be independently established against publisher commit. The source CSV Model_Revision_Hash may be an internal run identifier, not the full upstream commit.",
                  "The original tie-breaking and preprocessing must be separately authenticated.",
                  "This is a dense encoder replay, not BM25/full-stack reproducibility or supplier evidence verification."]}
 
